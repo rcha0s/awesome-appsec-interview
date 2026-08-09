@@ -98,10 +98,10 @@ Section order:
   2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences, states the root cause so an interviewer can quote it back). ONLY title and this blockquote appear before ## Quick reference.
   3. \`## Quick reference\` containing exactly (a) a wire-level example code block (real bytes / JSON / HTTP / protocol frame), then (b) the invariants table (columns Invariant | Where enforced | How violated | Source; 3-8 rows). Source column names the spec in plain text (URL lives in numbered Sources). Nothing else in Quick reference.
   4. \`## How it works\` (mechanism / architecture / protocol). Uses \`###\` sub-headings where natural. Diagrams (mermaid) live here.
-  5. \`## Attack techniques\` — enumerated with \`### N. <name>\` sub-headings. Each technique body is prose (2-4 short paragraphs) that WEAVES all four rubric elements without bolded sub-heads: mechanism, payload/example, black-box + blind/OOB confirmation, escalation. Do NOT use \`**Mechanism.**\`, \`**Payload.**\`, \`**Black-box confirmation.**\`, \`**Escalation.**\` bolded sub-heads.
-  6. \`## Defense\` — split into \`### Real fix\` and \`### Defense in depth\` sub-headings. Numbered items within each cluster, ordered by effectiveness. Each states invariant enforced, why it works, common wrong implementation, source. Clickable [N] refs.
+  5. \`## Attack techniques\`: enumerated with \`### N. <name>\` sub-headings. Each technique body is prose (2-4 short paragraphs) that WEAVES all four rubric elements without bolded sub-heads: mechanism, payload/example, black-box + blind/OOB confirmation, escalation. Do NOT use \`**Mechanism.**\`, \`**Payload.**\`, \`**Black-box confirmation.**\`, \`**Escalation.**\` bolded sub-heads.
+  6. \`## Defense\`: split into \`### Real fix\` and \`### Defense in depth\` sub-headings. Numbered items within each cluster, ordered by effectiveness. Each states invariant enforced, why it works, common wrong implementation, source. Clickable [N] refs.
   7. \`## Detection and telemetry\` (log fields, alerts, canary shapes; prose; no [N] required).
-  8. \`## Interviewer probes\` — 5-8 Q&A pairs. Each Q on its own bold or heading line. Each A has "Mid:" one-liner AND "Principal:" answer (2-4 sentences).
+  8. \`## Interviewer probes\`: 5-8 Q&A pairs. Each Q on its own bold or heading line. Each A has "Mid:" one-liner AND "Principal:" answer (2-4 sentences).
   9. \`## War story\` (optional).
   10. \`## Sources\` (global numbered list, dense).
 
