@@ -67,6 +67,22 @@ This is a **revision aid, not a tutorial**. It assumes deep prior knowledge and 
 | 28 | [GraphQL](docs/28-graphql.md) | Introspection, resolver-level authz, batching abuse, query-depth DoS |
 | 29 | [API security (REST)](docs/29-api-security.md) | OWASP API Top 10 2023, BOLA/BFLA/BOPLA, SSPP, mass assignment |
 
+### Authentication protocols and federated identity
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 67 | [Single Sign-On (SSO)](docs/67-sso.md) | Trust delegation pattern, SP- vs IdP-initiated, SLO, IdP-compromise blast radius, Golden SAML |
+| 68 | [SAML 2.0](docs/68-saml.md) | Bindings, assertion signing, XSW, comment truncation, InResponseTo binding, IdP-initiated CSRF |
+| 69 | [mTLS and client-certificate auth](docs/69-mtls.md) | TLS 1.2 vs 1.3 handshake, SAN/CN matching, revocation, TLS-terminator header trust |
+| 70 | [WebAuthn, passkeys, and FIDO2](docs/70-webauthn-passkeys.md) | Registration/assertion ceremonies, RP ID + origin binding, attestation formats, sync passkeys vs device-bound |
+| 72 | [Session management deep dive](docs/72-session-management.md) | Cookie flags, __Host- prefix, rotation, sliding vs absolute expiry, revocation model, hijacking vectors |
+| 73 | [MFA and step-up authentication](docs/73-mfa-step-up.md) | TOTP/HOTP, push-fatigue, WebAuthn as MFA, acr/amr claims, step-up flows, MFA-bombing |
+| 75 | [Password authentication in 2026](docs/75-password-authentication.md) | Argon2id/scrypt/bcrypt tuning, NIST 800-63B rev4, breach-list checks, credential stuffing defenses |
+| 77 | [OpenID Connect deep dive](docs/77-oidc-deep.md) | id_token verification, nonce, discovery, RP-initiated + back-channel logout, PAR, JAR, FAPI |
+| 78 | [Token exchange and delegation](docs/78-token-exchange.md) | RFC 8693, on-behalf-of, actor/may_act claims, RFC 8707 audience binding, downscoping |
+| 81 | [SPIFFE and SPIRE](docs/81-spiffe-spire.md) | Workload identity, X.509 SVID, JWT SVID, workload attestation, federation, service-mesh mTLS |
+| 82 | [OpenID Federation](docs/82-openid-federation.md) | Entity statements, trust chain to trust anchor, trust marks, automatic client registration |
+
 ### AI and agent security — overview and umbrella docs
 
 | # | Topic | Focus |
