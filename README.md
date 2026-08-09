@@ -67,12 +67,65 @@ This is a **revision aid, not a tutorial**. It assumes deep prior knowledge and 
 | 28 | [GraphQL](docs/28-graphql.md) | Introspection, resolver-level authz, batching abuse, query-depth DoS |
 | 29 | [API security (REST)](docs/29-api-security.md) | OWASP API Top 10 2023, BOLA/BFLA/BOPLA, SSPP, mass assignment |
 
-### AI and agent security
+### AI and agent security — overview and umbrella docs
 
 | # | Topic | Focus |
 |---|-------|-------|
-| 30 | [Web LLM attacks](docs/30-web-llm-attacks.md) | Direct/indirect prompt injection, excessive agency, insecure output handling |
-| 31 | [MCP protocol security](docs/31-mcp-protocol-security.md) | Tool poisoning, rug pulls, cross-server shadowing, token passthrough |
+| 30 | [Web LLM attacks](docs/30-web-llm-attacks.md) | Hub: OWASP LLM Top 10 (2025) landing, links to deep dives 33–43 |
+| 31 | [MCP protocol security](docs/31-mcp-protocol-security.md) | Hub: MCP overview, links to deep dive 55 and attacks 52/53 |
+| 32 | [Agentic AI threats and mitigations](docs/32-agentic-ai-threats.md) | Hub: agent architecture, control loop, threat model across 44–54 |
+
+### OWASP LLM Top 10 (2025) — one doc per class
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 33 | [Direct prompt injection](docs/33-direct-prompt-injection.md) | LLM01a: role-token unreliability, jailbreak templates, universal adversarial suffixes, encoding evasion |
+| 34 | [Indirect prompt injection](docs/34-indirect-prompt-injection.md) | LLM01b: retrieved-content injection, ASCII smuggling, markdown-image exfil, EchoLeak |
+| 35 | [Sensitive information disclosure](docs/35-sensitive-info-disclosure.md) | LLM02: training-data extraction, PII regurgitation, embedding inversion, RAG source leak |
+| 36 | [LLM supply chain](docs/36-llm-supply-chain.md) | LLM03: model/tokenizer/dataset supply chain, HuggingFace hub, poisoned fine-tunes |
+| 37 | [Data and model poisoning](docs/37-data-and-model-poisoning.md) | LLM04: training-time poisoning, instruction-tuning backdoors, sleeper agents, RLHF poisoning |
+| 38 | [Improper output handling](docs/38-improper-output-handling.md) | LLM05: markdown-image exfil, SSRF via LLM-emitted URLs, XSS via chat rendering, sink recycling |
+| 39 | [Excessive agency](docs/39-excessive-agency.md) | LLM06: excessive functionality/permissions/autonomy, confused deputy in tool calls |
+| 40 | [System prompt leakage](docs/40-system-prompt-leakage.md) | LLM07: extraction techniques, "secret system prompt" anti-pattern, credentials-in-prompt |
+| 41 | [Vector and embedding weaknesses](docs/41-vector-embedding-weaknesses.md) | LLM08: embedding poisoning, embedding inversion, cross-tenant retrieval bleed |
+| 42 | [Misinformation and hallucination grounding](docs/42-misinformation-and-hallucination.md) | LLM09: package hallucination (slopsquatting), code-suggestion hallucination, verifier LLMs |
+| 43 | [Unbounded consumption (denial of wallet)](docs/43-unbounded-consumption.md) | LLM10: fan-out loops, token amplification, per-user budgets, cost anomaly detection |
+
+### Agent-specific attack classes
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 44 | [Memory poisoning](docs/44-memory-poisoning.md) | Persistent injection via long-term memory, cross-session persistence, cross-tenant memory bleed |
+| 45 | [Plan and goal hijacking](docs/45-plan-goal-hijacking.md) | Loop-level objective rewrite, multi-turn priming, two-shot elicitation |
+| 46 | [Cascading hallucination](docs/46-cascading-hallucination.md) | Multi-agent orchestration, cross-agent privilege laundering, weakest-agent exploitation |
+| 47 | [Human-in-the-loop bypass](docs/47-hitl-bypass.md) | Approval fatigue, spoofed UI, auto-approve escape hatches, batch approval |
+| 48 | [Cross-agent trust and A2A injection](docs/48-cross-agent-trust.md) | Unauthenticated semantic content, agent registration abuse, shared-channel poisoning |
+| 49 | [Tool-schema confusion](docs/49-tool-schema-confusion.md) | Typed-argument violations, semantic vs shape gap, sink recycling into 05/11/01/04 |
+| 50 | [Credential passthrough and token scoping](docs/50-credential-passthrough.md) | Over-broad scopes, RFC 8707 audience-binding violations, refresh-token leak via logs |
+| 51 | [Sandbox escape via tool composition](docs/51-sandbox-escape-via-composition.md) | Composition-level escape, shared workspaces, network egress through helper tools |
+| 52 | [MCP cross-server shadowing and tool poisoning](docs/52-mcp-cross-server-shadowing.md) | Tool-description hijack across servers, rogue registry servers |
+| 53 | [Rug pull and tool-definition drift](docs/53-rug-pull-tool-drift.md) | Metadata-plane supply chain, hash pinning at approval, manifest tables |
+| 54 | [Orchestrator prompt injection (template escape)](docs/54-orchestrator-prompt-injection.md) | Unescaped template variables, GitLab Duo MR-title, Notion AI title-field |
+
+### AI/agent protocols and architectures
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 55 | [Model Context Protocol (MCP) deep dive](docs/55-mcp-protocol-deep.md) | JSON-RPC transport, capability negotiation, sampling, resource indicators, session semantics |
+| 56 | [A2A protocol](docs/56-a2a-protocol.md) | Agent card discovery, task lifecycle, principal-and-authority binding, streaming updates |
+| 57 | [Function-calling protocols](docs/57-function-calling-protocols.md) | OpenAI tools, Anthropic tool-use, Gemini function-calling, schema semantics vs shape |
+| 58 | [RAG architecture and attack surface](docs/58-rag-architecture-attacks.md) | Ingestion/retrieval/generation stage-by-stage, chunker, reranker, prompt-assembly |
+| 59 | [Vector stores](docs/59-vector-stores.md) | pgvector, Pinecone, Weaviate, Milvus, multi-tenancy, key scoping, RLS |
+| 60 | [Model serving and inference-API attacks](docs/60-model-serving-attacks.md) | vLLM, TGI, TensorRT-LLM, Triton, KV-cache side channels, batch timing |
+| 61 | [Guardrail systems](docs/61-guardrail-systems.md) | Rebuff, Lakera, PromptGuard, LlamaGuard, NeMo Guardrails, Azure AI Content Safety, honest limits |
+| 62 | [Model file formats and loaders](docs/62-model-file-formats.md) | pickle RCE, safetensors, GGUF, ONNX, Fickling, allowlist safe formats |
+
+### AI/agent defenses
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 65 | [AI/agent defenses reference](docs/65-ai-agent-defenses.md) | Least-privilege tool scoping, HITL, trust tiering, structured output, egress allowlists, audit |
+| 66 | [Spotlighting](docs/66-spotlighting.md) | Delimiting, datamarking, encoding variants, invariant enforced, residuals |
 
 ### Cross-cutting
 
@@ -84,6 +137,8 @@ This is a **revision aid, not a tutorial**. It assumes deep prior knowledge and 
 ## Suggested revision order
 
 If you are cramming, prioritise by interview frequency: **XSS, SQLi, access control/IDOR, SSRF, CSRF, auth/session, JWT, OAuth**, then request smuggling and the caching/host-header trio, then the AI/agent docs if the role touches LLM or MCP integrations.
+
+For AI/agent-heavy roles: start at hubs 30 → 31 → 32, then walk the OWASP LLM Top 10 series 33–43 in order, then agent-specific attacks 44–54, then protocol deep dives 55–62, then defenses 65–66.
 
 ## Global reference libraries
 
