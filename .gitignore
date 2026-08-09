@@ -15,3 +15,6 @@ desktop.ini
 # Misc
 *.log
 .tmp/
+
+# Claude Code project-local settings (machine-specific)
+.claude/settings.local.json
