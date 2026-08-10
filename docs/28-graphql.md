@@ -178,6 +178,39 @@ If the endpoint accepts requests a browser can send cross-site (GET, or POST wit
 
 Why it works: the endpoint processed a browser-forgeable request under the victim's session with no CSRF token and no content-type enforcement.
 
+11. Alias-based race conditions (single-packet attacks against non-atomic resolvers).
+
+Aliases are also a race-condition primitive, not just a rate-limit bypass. Aliased fields inside one operation execute in parallel on many GraphQL servers, and one HTTP request means one TCP write, so the aliased mutations hit the server as close to simultaneously as any single-packet attack. A mutation guarded by a non-atomic check-then-write is trivially raced.
+
+Classic targets: redeeming a single-use coupon N times, draining a balance by triggering N concurrent `transfer` mutations that each pass the `balance >= amount` check before any decrement lands, or reusing a one-time OTP/token in parallel `verifyOtp` calls that all consume the same not-yet-invalidated code.
+
+```graphql
+mutation {
+  r1: redeemCoupon(code: "SAVE50") { credit }
+  r2: redeemCoupon(code: "SAVE50") { credit }
+  r3: redeemCoupon(code: "SAVE50") { credit }
+  r4: redeemCoupon(code: "SAVE50") { credit }
+}
+```
+
+GraphQL amplifies this over REST because you do not need N connections and do not need HTTP/2 last-byte-sync tricks; one JSON body with aliases collapses the timing window. The defense is at the resolver: wrap the check-and-write in a DB transaction with SERIALIZABLE isolation, or use `SELECT ... FOR UPDATE`, an optimistic-lock version column, or a unique constraint on the invariant (one redemption per code, monotonic balance). Alias caps help but do not fix a resolver that races itself with two aliases.
+
+12. Pre-execution DoS via directive overloading and fragment amplification.
+
+Two DoS patterns operate before resolvers execute and slip past cost/complexity analyzers that run post-parse. The first is directive overloading, where a field is stacked with thousands of `@skip(if:false)` / `@include(if:true)` / custom directives (`field @a @a @a ... @a`), forcing the parser and validator to walk each occurrence and blowing CPU/memory during validation. The document is small on the wire but expensive to validate.
+
+The second is fragment amplification. Many small fragments reference each other so the expanded document is exponential in size even though the wire payload stays tiny:
+
+```graphql
+query { ...A }
+fragment A on Query { ...B ...B ...B ...B ...B ...B ...B ...B }
+fragment B on Query { ...C ...C ...C ...C ...C ...C ...C ...C }
+fragment C on Query { ...D ...D ...D ...D ...D ...D ...D ...D }
+fragment D on Query { __typename }
+```
+
+The GraphQL spec forbids cyclic fragments, but non-cyclic fan-out is legal and lethal: each additional layer multiplies the expanded AST. Cost analysis that runs after parsing may still reject it, but only after the server has already paid the parse/validate cost, which is exactly what the attacker wanted. Defenses: reject documents exceeding a max directive-per-field count, a max fragment-spread count, and a max token/AST-node count before validation; enforce a request byte-size cap early; and prefer persisted-query allowlists, which nullify both attacks because unregistered documents never parse.
+
 Tooling summary: InQL (Doyensec, Burp extension) for introspection parsing and query generation, Clairvoyance for suggestion-based schema recovery, graphw00f for engine fingerprinting, graphql-cop for a quick misconfiguration audit, GraphQL Visualizer for schema mapping, and Burp Scanner (raises "GraphQL endpoint found", "GraphQL introspection enabled", "GraphQL suggestions enabled").
 
 ## Defense
@@ -198,6 +231,10 @@ Ordered by impact.
 
 7. Return generic errors: strip stack traces and internal details from error messages so error content does not leak schema or backend structure.
 
+8. Make state-changing resolvers atomic against alias/batch races. Invariant: any mutation that enforces a uniqueness or capacity constraint (one redemption per coupon, non-negative balance, one-time-use token) must resolve its check-and-write as a single atomic step, not as separate `read then write` calls. Enforce with a DB transaction at SERIALIZABLE isolation, `SELECT ... FOR UPDATE` on the row, an optimistic-lock version column, or a `UNIQUE` constraint that turns the second write into a violation. Common wrong implementation: `if (coupon.usesLeft > 0) { coupon.usesLeft -= 1; grantCredit() }` at read-committed isolation with no row lock, which two aliased calls in one document happily double-spend. Alias caps are a partial mitigation; the resolver is the root fix.
+
+9. Bound parse/validate cost before execution. Invariant: no document reaches the resolver phase without passing structural limits on request byte size, directive count per field, fragment-spread count, and total AST-node count. Why it works: directive overloading and fragment amplification blow up during parse/validate, so post-parse cost analysis is too late; capping the AST size shape upstream keeps the server from spending CPU on documents it will reject anyway. Common wrong implementation: relying only on `graphql-depth-limit` and a per-field cost estimator, both of which run after the document has been parsed and (for fragments) fully expanded. Persisted-query allowlists sidestep the entire problem because unregistered documents never parse.
+
 ## Interview-grade nuances
 
 - The single most important sentence: "GraphQL authorization must be enforced at the resolver, per object and per field, because the endpoint and HTTP method are identical for every operation, so there is nowhere else to put it." Candidates who answer "add auth middleware on the route" have missed the model.
@@ -213,6 +250,20 @@ Ordered by impact.
 - BOLA is the most common and highest-impact GraphQL bug in practice (mirrors OWASP API1); the object-fetch-by-id resolver is the classic hole because list-level filtering lulls developers into assuming the object resolver is also guarded.
 
 - Subscriptions over WebSocket are an often-forgotten attack surface: authz and rate limiting frequently do not extend to the subscription transport, and long-lived connections are a resource-exhaustion vector.
+
+## Interviewer probes
+
+Q: How does GraphQL turn aliases into a race-condition primitive, and how would you fix a coupon-redemption resolver that is vulnerable to it?
+
+Mid: Aliases send many copies of the same mutation in one request so they arrive together and race the resolver; fix it with a database transaction or a lock.
+
+Principal: On most GraphQL servers, sibling fields inside one operation resolve in parallel, and one HTTP request is one TCP write, so aliased mutations reach the server with a timing spread narrower than anything you can achieve with N REST connections. It is effectively a single-packet attack without needing HTTP/2 last-byte sync. A coupon resolver written as `read usesLeft; if (usesLeft > 0) { decrement; grantCredit; }` at read-committed isolation is trivially raced: four aliased calls all read `usesLeft = 1`, all pass the check, all grant credit. The fix is at the resolver, not the alias cap. Make check-and-write atomic: SERIALIZABLE isolation plus retry on serialization failure, or `SELECT ... FOR UPDATE` on the coupon row inside the transaction, or an optimistic-lock version column, or (cleanest) model the invariant as a database constraint (a `UNIQUE (coupon_id, user_id)` row on redemption so the second insert fails). Alias caps and complexity limits are defense in depth; a resolver that races itself between two aliases will race itself between two REST requests with a bit more effort. The same pattern applies to balance transfers, single-use OTP consumption, and gift-card redemption.
+
+Q: A team disabled introspection, added a query-depth limit of 10, and enabled `graphql-cost-analysis`. Is that enough to stop DoS, and what would you still worry about?
+
+Mid: No, aliases can still fan out a shallow query into thousands of resolver calls; also disable batching and cap aliases.
+
+Principal: Those three controls are the classic checklist and they miss the two DoS classes that run before resolvers do. Directive overloading (`field @skip(if:false) @skip(if:false) ... x1000`) makes the parser and validator walk every occurrence, burning CPU and memory during validation with a document that is small on the wire and shallow in depth. Fragment amplification exploits legal non-cyclic fan-out (`A -> B B B ... -> C C C ... -> ...`), producing an expanded AST that is exponential in the number of fragments even though the raw document is a few hundred bytes; cost analysis running post-expansion may reject the query, but the server already paid the parse-and-expand cost the attacker wanted it to pay. The right answer is to bound the document structurally before parse/validate finishes: cap request byte size, directives-per-field, fragment-spread count, and total AST-node count, and reject early. Separately, persisted-query allowlists remove the entire class because arbitrary documents never parse in production. I would also make sure the depth limit accounts for width, not just height, because a shallow query with thousands of aliased root fields can still DoS a naive resolver that fires a DB query per field.
 
 ## Sources
 

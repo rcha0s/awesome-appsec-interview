@@ -81,3 +81,7 @@ Every doc follows this order:
 - Prose over stacked bullets. Bullets earn their place only for enumerable lists.
 - No inline author names in prose. Sources entries name the venue / URL, not authors.
 - Never invent a paper, CVE, or advisory. If uncertain, drop the claim.
+
+## Repo rules
+
+- Every commit that adds, removes, or renames a doc under `docs/` also updates `README.md` in the same commit. A doc that exists on disk but not in the index is invisible to the reader. This is not optional and does not get deferred to a follow-up.

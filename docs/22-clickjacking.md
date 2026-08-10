@@ -79,6 +79,10 @@ Refinements attackers use:
 
    Detection/confirmation across all of these: try to frame the page; if it renders and no `X-Frame-Options` / `Content-Security-Policy: frame-ancestors` response header is present, it is frameable. Then verify a transparent overlay routes clicks into the frame.
 
+7. **Mobile tapjacking (Android overlay attacks).** The mobile analogue of clickjacking is tapjacking, where a malicious app draws an overlay on top of a legitimate app so the user's tap passes through to the target app's UI, granting a permission, confirming a payment, or triggering an irreversible action the user believes they are declining. The classic vector is the `SYSTEM_ALERT_WINDOW` permission, which lets an app draw over other apps at arbitrary coordinates. Historically attackers also abused Toast views (which did not require the permission on older Android versions) and accessibility services (which can both observe and inject touches across app boundaries).
+
+   Mitigations for tapjacking live in the target app, not the browser or the OS-level headers. Set `android:filterTouchesWhenObscured="true"` on sensitive views, or override `onFilterTouchEventForSecurity`, so Android drops any touch that arrives while another window is obscuring the receiving view. For irreversible actions (payments, permission grants, key export) require a biometric or PIN step-up rendered in a secure surface the overlay cannot cover. WebViews embedded inside a mobile app still inherit the web framing story (`frame-ancestors` and `X-Frame-Options` still apply to their loads), but the OS-level overlay attack sits below the web layer and needs the app-side touch-filtering flag; framing headers do nothing about it.
+
 ## Defense
 
 Ordered by effectiveness. Framing headers are the only real fix; everything else is depth or scope-narrowing.
@@ -122,9 +126,14 @@ Ordered by effectiveness. Framing headers are the only real fix; everything else
 
    Use only to cover legacy browsers without header support; it is bypassable (sandbox, double framing, 204 flushing) and never a substitute for `frame-ancestors`.
 
+6. **Fetch Metadata Resource Isolation Policy (application-layer defense in depth).** Modern browsers stamp every outgoing subresource request with `Sec-Fetch-Dest` (for framed loads this is `iframe` or `frame`, or `document` for the top-level), `Sec-Fetch-Site` (`same-origin` / `same-site` / `cross-site` / `none`), and `Sec-Fetch-Mode` (`navigate` for document loads). A server-side middleware can enforce a Resource Isolation Policy: if `Sec-Fetch-Dest` is `iframe`/`frame` and `Sec-Fetch-Site` is `cross-site` (and the request is not on an explicit framing-allowlist), reject with 403 before the response body ships. The invariant enforced is "no cross-site party may embed this endpoint as a frame unless it is explicitly listed."
+
+   Why this works alongside `frame-ancestors`: it catches cases where a CDN, WAF, or reverse proxy strips the CSP header in transit; it protects non-HTML endpoints (JSON, script) that browsers do not normally treat as documents but that a determined framer might still target; and it enforces at the application layer where per-tenant framing rules already live. Attackers cannot forge these headers from a web origin because the `Sec-` prefix is on the browser's forbidden-header list, so page-controlled script (fetch/XHR) cannot set or override them. Common wrong implementation: treating missing `Sec-Fetch-*` headers as "cross-site, reject" without a fallback for legitimately old clients that never send them, and inverting the check so `same-origin` accidentally blocks internal iframe use. Treat as depth behind `frame-ancestors`, not a replacement.
+
 ## Interview-grade nuances
 
 - **`frame-ancestors` supersedes X-Frame-Options.** Per the CSP spec, if a response carries an enforced `frame-ancestors` directive, the browser MUST ignore `X-Frame-Options`. Older engines (for example Chrome 40, Firefox 35) violated this and preferred XFO. Practical guidance: send both, but treat `frame-ancestors` as the source of truth and never let a permissive XFO undermine a strict CSP in modern browsers.
+- **`frame-ancestors` checks the entire ancestor chain, not just the parent.** The directive is evaluated against every ancestor browsing context up to the top-level. If any ancestor origin fails the source list, the load is blocked. So `frame-ancestors https://partner.example` still blocks if partner.example itself is framed by an attacker origin one level up: the attacker cannot launder framing by putting an allowed origin between themselves and the target. This is the exact opposite of the dead `ALLOW-FROM`, which only checked the top-level context and therefore broke on legitimate nested embeds. Interviewer phrasing: "If A embeds B embeds C, and C sends `frame-ancestors B`, does it load?" Answer: no, because A is also an ancestor and is not in the list.
 - **CSRF token != clickjacking defense.** The framed request is a genuine, on-domain, fully-authenticated request in the victim's real session, so it carries a valid CSRF token automatically. The differentiator: CSRF forges an entire request without user interaction; clickjacking needs a real user gesture but on hidden UI. SameSite cookies help both; tokens help only CSRF.
 - **You cannot allowlist multiple framers with XFO.** Only one value is honored and `ALLOW-FROM` is dead. Multi-partner embedding requires `frame-ancestors host-a host-b`.
 - **Nested-frame ALLOW-FROM breakage.** `ALLOW-FROM` applies to the top-level browsing context, not the immediate parent, so a legitimately allowed child frame nested one level deeper fails to load. Another reason it is deprecated.
@@ -143,3 +152,6 @@ Ordered by effectiveness. Framing headers are the only real fix; everything else
 - MDN - Content-Security-Policy: frame-ancestors: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-ancestors
 - Rydstedt, Bursztein, Boneh, Jackson - "Busting Frame Busting" (Stanford, 2010)
 - Paul Stone - "Next Generation Clickjacking" (Black Hat Europe, 2010)
+- W3C Fetch Metadata Request Headers: https://www.w3.org/TR/fetch-metadata/
+- web.dev - Protect your resources from web attacks with Fetch Metadata: https://web.dev/articles/fetch-metadata
+- Android Developers - View security (`filterTouchesWhenObscured`): https://developer.android.com/reference/android/view/View#attr_android:filterTouchesWhenObscured

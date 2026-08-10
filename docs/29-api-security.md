@@ -135,6 +135,42 @@ GET /userSearch?name=peter%26name=administrator&back=/home
 
 Which wins depends on the backend stack: PHP takes the last parameter (`administrator`), ASP.NET concatenates (`peter,administrator`), Node/Express takes the first (`peter`). REST-path variant: inject encoded path traversal (`peter%2f..%2fadmin`) so an internal `/api/private/users/peter/../admin` normalizes to `/admin`. Structured-format variant: break out of JSON in the embedded value (`peter","access_level":"administrator`) so the server-side body becomes `{"name":"peter","access_level":"administrator"}`. SSPP also occurs in responses when stored input is embedded into a backend JSON response without encoding. Detection: Burp Scanner's "suspicious input transformation" and the Backslash Powered Scanner flag candidate inputs.
 
+### HTTP method override to bypass function-level authorization
+
+Many frameworks accept a tunneled verb through a header or a query/body parameter, dispatching internally on the override while the outer request stays a POST. Symfony, Laravel, older Spring, Rails, and Express with the `method-override` middleware all honor headers like `X-HTTP-Method-Override: DELETE`, `X-Method-Override`, or `X-HTTP-Method`, and query/body forms like `?_method=PUT` on a POST. The pattern originated for HTML-form clients that could only issue GET and POST, and it survives long after those clients do.
+
+The exploit is that front proxies, WAFs, and gateway ACLs frequently authorize on the outer verb (POST) while the application dispatches on the overridden one. `POST /api/admin/users/42` with `X-HTTP-Method-Override: DELETE` reaches a DELETE handler that a POST-only rule at the edge cheerfully permitted, and the DELETE handler assumed method-level authz had already been enforced. The same shape works against role-gated method filters in the framework itself when the filter runs before the override is applied.
+
+Confirmation: send the low-privilege verb with the override header set to a high-privilege verb and watch for the state change the outer verb should never produce (a deletion, a role update, a resource creation). Fuzz the header names and the `_method` parameter across a small set of state-changing routes to find handlers that honor the override.
+
+Defense: disable method-override middleware in production, or strip the header at the edge before any authorization decision runs. If the app must keep it, enforce authorization on the effective (post-override) verb inside the application, never on the outer HTTP method alone, and log the override so anomalies are visible.
+
+### Race conditions and single-packet limit-overruns on sensitive flows
+
+Many API bugs are TOCTOU races where a check-then-act flow can be executed multiple times concurrently before the state update commits. Classic targets: redeeming a single-use coupon or gift card, withdrawing funds past a balance, using an MFA/OTP code more than once, applying a referral bonus, upgrading to a plan while the payment webhook is still pending, claiming a limited-quantity offer. The application reads the state ("is this coupon used?"), decides "no", and writes the effect, but between the read and the write another instance of the same request finished the same three steps against the same state.
+
+Technique: send the same authorized request in parallel and time the arrivals to fall inside one server-side scheduling window. HTTP/2's single-packet attack packs multiple requests into a single TCP packet so they hit the server microseconds apart, defeating naive per-request locks and slow round-trip synchronization. Turbo Intruder with `engine=Engine.BURP2` and `sendChunkedPost` is the standard tool. Where HTTP/2 is not available, connection warming plus last-byte synchronization approximates the effect on HTTP/1.1.
+
+Confirmation: run the parallel batch and observe that a limit meant to allow one action succeeded more than once (multiple redemptions of the same coupon in the ledger, balance driven negative, two active plan upgrades). Watch that the affected rows share a single "used_at" or version value from the same check, proving the reads were concurrent.
+
+Defense: enforce atomicity at the data layer, not at application code. `SELECT ... FOR UPDATE` inside the transaction, unique constraints on `(user_id, coupon_id)` or `(user_id, otp_code)`, idempotency keys required on mutating endpoints so a retry cannot be a second effect, and optimistic concurrency with version columns that fail the second writer. An application-level `if (used) return` is exactly the check that races lose.
+
+### CORS misconfigurations that turn cross-origin into cross-account
+
+CORS is enforced by the browser based on response headers the API sets, so a misconfigured `Access-Control-Allow-Origin` policy is what lets an attacker origin read authenticated responses cross-site. The exploitable patterns are: reflecting the request `Origin` into `Access-Control-Allow-Origin` while also sending `Access-Control-Allow-Credentials: true`, so any attacker origin gets a green light to read the response with the victim's cookies attached; trusting `null` as an origin (sandboxed iframes, `data:` and `file://` documents send `Origin: null`, and an attacker can force `null` from a controlled sandbox); overly loose regex allowlists (`.*\.example\.com` matches `evil.example.com.attacker.tld`, missing anchors or unescaped dots turn "our subdomains" into "any hostname containing our domain"); and `Access-Control-Allow-Origin: *` combined with a bearer token the browser sends via a service worker or where credentials have been moved into a custom header (the "no wildcard with credentials" rule does not save you if the credential is not a cookie).
+
+Confirmation: send `Origin: https://attacker.tld` on an authenticated request and check whether the response includes `Access-Control-Allow-Origin: https://attacker.tld` and `Access-Control-Allow-Credentials: true`. Repeat with `Origin: null`. If the origin is reflected or `null` is trusted, host a proof page on the attacker origin that reads the API response via `fetch(..., {credentials: "include"})` and demonstrates cross-site data exfiltration.
+
+Defense: a static allowlist of exact origins compared with string equality, never a regex, never reflection without validation, and never `*` combined with credentials. Treat `Origin: null` as untrusted (do not include it in any allowlist), and remember that CORS does not block the request from being sent, only the response from being read, so state-changing endpoints still need CSRF protection independent of CORS.
+
+### Batch and bulk endpoints as BOLA multipliers
+
+Bulk endpoints (`POST /api/orders/batch`, `PATCH /api/users` with an array of ids, JSON:API `include=`, or a `?ids=1,2,3` list) frequently authorize the request rather than each object in it, so an authenticated user can slip other tenants' ids into the array and receive or mutate them alongside their own. The same pattern shows up in GraphQL, where a single query returns many nodes and only the top-level resolver runs an auth check, and in "select-and-apply" admin-style operations where a UI-shaped ids array is trusted because it came from a page the user "should only see their own rows on".
+
+Confirmation: take a legitimate bulk call, insert other users' ids alongside your own into the array or filter, and observe successful reads or writes. GUID-based ids do not save you here if the attacker can harvest ids from other endpoints (invitations, activity feeds, error messages leaking references).
+
+Defense: authorize each object inside the batch, not the batch as a whole. Either loop and call the same per-object authorization used on singleton endpoints, or push it into the database with a set-based `WHERE owner_id = :caller AND id IN (:ids)` so unowned ids simply do not match. Reject the whole batch on any single failure so partial-success does not silently exfiltrate one tenant's row while returning the caller's, and cap batch size to reduce blast radius and cost.
+
 ## Defense
 
 Ordered by impact and mapped to OWASP API Top 10 2023.
@@ -172,6 +208,8 @@ Ordered by impact and mapped to OWASP API Top 10 2023.
 - API10 inverts the usual trust model: the dangerous input arrives from a trusted-looking upstream, so "validate all input" must include responses from partners, not just clients. Blindly followed redirects and unvalidated upstream data are the concrete sinks.
 
 - Recon determines everything: most impactful API findings come from discovering an undocumented endpoint, an accepted extra HTTP method, a hidden parameter, or an old version, which is why methodology (docs, JS, verb and content-type fuzzing, version enumeration) is weighted so heavily.
+
+- Where authorization lives is a layered decision, not a single choice. Gateways and WAFs can enforce coarse controls (is the caller authenticated, does the token carry the required scope, is the caller within rate limits) but they cannot make object-level decisions because they lack the ownership graph and would need to duplicate it, which goes stale the moment the app changes. Putting BOLA checks at the gateway is an anti-pattern for that reason. Service-layer authorization (a central policy component invoked at every handler) is the right home for function- and object-level decisions because the service already has the ownership model. Data-layer enforcement (Postgres row-level security, `WHERE owner_id = :principal` on every query, tenant-scoped connections) is the strongest defense-in-depth because it survives handler bugs, ORM misuse, and future endpoints written by someone who forgot the check. The staff-level answer is that all four layers are used together: coarse authn/scope/rate limits at the gateway, deny-by-default policy engine at the service, tenant scoping enforced in the database, and property-level allowlists in the (de)serializer.
 
 ## Sources
 

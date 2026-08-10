@@ -50,6 +50,10 @@ Access-Control-Max-Age: 240
 
 Only if the preflight approves the method and headers does the browser send the real request. This is why requiring a custom header is a CSRF defense: the header forces a preflight the server can decline.
 
+Preflight itself does not follow redirects. If the `OPTIONS` response is a 3xx, the browser aborts the pending request with a CORS error rather than re-preflighting the redirect target. The subsequent real request may follow redirects, but each hop's response must independently satisfy CORS, and a cross-origin redirect re-runs the checks against the new origin. Operationally this means an API gateway that 301s `/api` to `/api/` breaks CORS clients until the client uses the trailing-slash URL directly or the gateway is reconfigured, and a defender cannot assume that an approved preflight implies the browser will surface the final response, because a mid-chain redirect can strip credentials or reject the read.
+
+**Two header-controlling knobs, not one.** `Access-Control-Allow-Headers` appears in the preflight response and names which *request* headers the caller may send. `Access-Control-Expose-Headers` appears on the actual response and names which *response* headers cross-origin JavaScript is allowed to read. By default the browser only exposes the CORS-safelisted response headers (`Cache-Control`, `Content-Language`, `Content-Length`, `Content-Type`, `Expires`, `Last-Modified`, `Pragma`) to script; everything else stays hidden, including any echoed `Authorization`, custom auth tokens, `X-CSRF-Token`, or correlation IDs. A server that emits sensitive material in a response header and then declares `Access-Control-Expose-Headers: *` (or reflects a wildcard) leaks that material over an otherwise-tightened endpoint. The wildcard-with-credentials rule applies here too: on a credentialed response, `*` is treated as the literal string `*`, not a match-all, so the browser's own credentialed-response gating still applies, but the misconfiguration pattern is identical to ACAO reflection and is a second, independent leak surface most candidates forget.
+
 ## Attack techniques
 
 ### 1. Reflected origin with credentials (the classic critical bug)
@@ -82,6 +86,8 @@ req.send();
 ```
 
 Why it works: the victim's browser attaches their session cookie, the server approves the attacker origin, the browser hands the authenticated body to attacker JS, which exfiltrates it. This attack class was popularized by James Kettle of PortSwigger Research in "Exploiting CORS misconfigurations for Bitcoins and bounties" (2016).
+
+Modern SameSite cookie defaults change the shape of this bug without eliminating it. Chrome 80+ and Firefox 96+ default session cookies to `SameSite=Lax` when the attribute is absent, and a cross-site credentialed `fetch`/XHR is not a top-level GET navigation, so those cookies are not attached and the classic exploit collapses to the response body of an unauthenticated request. The finding remains critical when the target explicitly sets `SameSite=None; Secure` (common for SSO, APIs, and apps that need cross-site embedding), when the credential is an `Authorization` header or client certificate (SameSite governs cookies only), when the attacker origin is a subdomain of the target and therefore first-party under Lax rules, or when the client is an older or non-Chromium browser with legacy defaults. "Reflected-origin CORS is dead because of SameSite" is the wrong-shaped answer; the correct one is that the class narrowed, and the follow-up worth chasing is enumerating the `SameSite=None` cookies and non-cookie credentials the target actually relies on.
 
 ### 2. Trusted null origin
 
@@ -149,6 +155,8 @@ HTTP/1.1 200 OK
 Access-Control-Allow-Origin: *
 ```
 
+Chromium now narrows this class with Private Network Access (PNA, formerly CORS-RFC1918). When a public-address document issues a request to a private-address target (RFC1918 range or loopback), the browser sends an additional preflight regardless of whether the request would otherwise qualify as "simple", carrying `Access-Control-Request-Private-Network: true`. The intranet server must answer with `Access-Control-Allow-Private-Network: true` for the request to proceed, and the initiator must be a secure context. That default-deny stance kills the classic "public web page reads intranet responses via `Access-Control-Allow-Origin: *`" pattern even when the intranet server still sends a wildcard. Caveats to state precisely at interview: PNA is Chromium-only and still in flux, is not shipped in Firefox or Safari, does not cover LAN-to-LAN requests where both origins are already private, and is bypassed the moment the intranet server explicitly opts in.
+
 ### 7. Vary: Origin cache leak
 
 When ACAO is computed from the request `Origin` but the response is served through a shared cache that does not key on `Origin`, one user's allowed-origin response can be cached and served to another origin, a cache-poisoning angle that turns a per-request grant into a cross-origin leak. Always emit `Vary: Origin` on origin-dependent responses.
@@ -170,6 +178,8 @@ CORS bugs are configuration bugs, so the defense is disciplined configuration, o
 6. **Emit `Vary: Origin`** on every response whose ACAO depends on the request origin, so shared caches cannot leak a grant across origins.
 
 7. **Keep server-side authentication, authorization, and CSRF defenses independent of CORS.** CORS is browser-enforced and controls reading only; it authorizes nothing on the server. An attacker can forge a request from any "trusted" origin using a non-browser client, so sensitive data still needs server-side access control regardless of the CORS policy. Avoid CORS wildcards on internal networks, since internal browsers can reach untrusted external sites.
+
+8. **Do not opt in to Private Network Access on internal servers unless the endpoint is genuinely safe for any public origin to read.** PNA is a browser-enforced default-deny for public-to-private requests in Chromium and is the only meaningful in-browser mitigation for the intranet-CORS attack outside of network segmentation. Never return `Access-Control-Allow-Origin: *` on internal responses, do not answer `Access-Control-Allow-Private-Network: true` reflexively, and treat internal browsers as hostile transit. Firefox and Safari do not enforce PNA today, so the underlying rule (never wildcard-ACAO an internal service) is what actually protects those users.
 
 ## Interview-grade nuances
 
