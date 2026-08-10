@@ -68,9 +68,9 @@ After the workflow returns, verify:
 
 If any check fails, surface it to the user with the exact line ranges and offer to re-run merge with a specific fix directive.
 
-### 6. Update README (optional)
+### 6. Update README (mandatory)
 
-Ask the user if they want the README index updated. If yes, add the new doc under the appropriate section table with a one-line Focus description. If no obvious section fits, ask which section header to place it under.
+Every new doc gets an entry in `README.md` in the same commit as the new file. The README is the reader's entry point; a doc that exists on disk but not in the index is invisible. Add a row to the section table that best fits the new doc, with a one-line Focus description. If no existing section fits, add a new section under an appropriate header and place the row inside it. Do not skip this step and do not defer it to a follow-up commit.
 
 ## Workflow script template
 
@@ -238,18 +238,17 @@ return { final }
 
 ## Post-workflow: verify and offer next steps
 
-Run the checks in step 5. If everything passes, ask:
+Run the checks in step 5, then update the README (step 6, mandatory). Once both are done, ask:
 
-- Update the README index? (offer to add under the section that best fits)
-- Commit the new doc? (if yes, conventional-commit format: `feat: add doc NN on <title>`; user is author of record; no co-author line)
+- Commit the new doc AND the README update in one commit? (if yes, conventional-commit format: `feat(docs): add doc NN on <title>`; user is author of record; no co-author line; commit body notes the README section that was updated)
 - Add another topic?
 
 ## Anti-patterns
 
 - Never draft the doc directly in the main context. Every new doc goes through the 4-agent pipeline so correctness, interviewer, and sources verifiers get a shot.
 - Never skip the opener contract. Line 1 is title, line 3 is blockquote mental model, then Quick reference. Depth-bar regressions silently accumulate if the skill emits a different order.
-- Do not write outside `docs/`. This skill produces one file only.
-- Do not update the README without explicit user approval.
+- Do not write outside `docs/` and `README.md`. This skill produces one new doc plus one README entry.
+- Never ship a new doc without updating README.md in the same commit. A doc that exists on disk but not in the index is invisible.
 - Do not commit without explicit user approval.
 - Do not reintroduce the removed sections (`## Interview-grade nuances`, standalone `## Spec / RFC anchors`).
 
