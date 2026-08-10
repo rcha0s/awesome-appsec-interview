@@ -154,6 +154,22 @@ Many servers reuse an HTTP/1.1 connection for multiple requests and dangerously 
 
 Treat `Host` like any other injectable header: if it reaches a SQL statement, template engine, log deserializer, or shell, standard SQLi/SSTI/injection probing applies. It is an oft-overlooked source because developers do not model it as user input.
 
+### 10. HTTP/2 downgrade and `:authority` versus `Host` disagreement
+
+HTTP/2 replaced the HTTP/1.1 `Host` header with the mandatory `:authority` pseudo-header, and most public front-ends terminate H2 at the edge and downgrade to HTTP/1.1 before forwarding to legacy origins. That rewrite step is a fresh source of component disagreement. If a client sends an H2 request with `:authority: victim.com` and an inconsistent `Host: attacker.com` header field, some proxies route on `:authority` (so validation passes) and then copy the `Host` field verbatim into the downgraded H1 request, so the back-end sees `Host: attacker.com`. The result is the full Host-attack toolkit (reset poisoning, cache poisoning, routing-based SSRF) landing on a back-end the front-end believed it had validated.
+
+The same rewrite boundary is the seed of H2.CL/H2.TE request smuggling. An H2 header value that contains CRLF sequences, a duplicate `Host` field, or an oversized token gets spliced into the H1 request that the front-end emits upstream, and a naive downgrader will produce a syntactically valid smuggled request whose `Host` (and body) is fully attacker-controlled.
+
+Test this class by sending H2 with intentionally mismatched `:authority` and `Host`, by omitting `Host` entirely on H2 (some downgraders synthesize it from `:authority` and some do not), and by placing CRLFs, whitespace, or duplicate host tokens inside H2 header values. The defense at the boundary is to reject H2 requests where a `Host` field is present and disagrees with `:authority`, to re-derive the outgoing H1 `Host` from `:authority` only, and to strictly validate H2 header field values against RFC 9113's forbidden-characters rules before forwarding.
+
+### 11. Host-name normalization bypasses
+
+Allowlists fail when the validator and the sink normalize the host differently. A trailing dot (`Host: vulnerable-website.com.`) is the same DNS name to a resolver but a different string to a naive allowlist, and browsers, frameworks, and cookie code strip it inconsistently, so a URL built from that `Host` may still fall inside the cookie scope while dodging the allowlist. IDN/punycode is the highest-impact variant: register a lookalike whose A-label (`xn--...`) passes an ASCII allowlist yet whose U-label renders in the recipient's email as the real domain, and reset-poisoning becomes indistinguishable from a legitimate mail.
+
+Unicode dot equivalents such as U+3002 (IDEOGRAPHIC FULL STOP) and U+FF0E (FULLWIDTH FULL STOP) survive some parsers as label separators and defeat a `endswith('.example.com')` check while still resolving usefully downstream. Case mismatches between case-insensitive DNS and case-sensitive string comparison, mixed IPv6 forms (`[::1]` versus `::1` versus `[0:0::1]`), leading/trailing whitespace tolerated by permissive parsers, and userinfo prefixes (`Host: attacker.com@victim.com` in stacks that accept it) round out the family.
+
+The defense pattern is to normalize before comparing: lowercase, IDNA-encode to punycode, strip a single trailing dot, canonicalize IPv6 to its compressed form, and reject anything that still contains whitespace, userinfo, or non-hostname characters. Use the framework's built-in host parser (Python's `idna` plus `ipaddress`, Go's `net/url` and `net.SplitHostPort`, Java's `InetAddresses`) rather than string operations, and match the normalized full host exactly.
+
 ## Defense
 
 1. Do not use the `Host` header to build absolute URLs or links. Prefer relative URLs wherever possible; this alone eliminates most reset-poisoning and Host-driven cache poisoning. This is the real fix, not a filter.
@@ -164,6 +180,8 @@ Treat `Host` like any other injectable header: if it reaches a SQL statement, te
 6. Segregate internal vhosts. Never co-host internal-only or admin applications on a server that also serves public content, so `Host` manipulation cannot reach them.
 7. Reject ambiguous requests at the edge: block duplicate `Host` headers, absolute-URI plus `Host` mismatches, and indented/folded header lines, and prefer HTTP/2 where `:authority` is unambiguous.
 8. Validate `Host` against the TLS SNI as defense in depth, and treat the header as untrusted input everywhere it reaches a sink (escape/parameterize for SQL, templates, and HTML contexts).
+9. At every H2-to-H1 downgrade boundary, re-derive the outgoing `Host` from `:authority` alone and reject inbound H2 requests whose `Host` field disagrees with `:authority` or whose header values contain characters (CR, LF, NUL, whitespace) forbidden by RFC 9113. The invariant is that the H1 request the back-end sees has exactly one `Host`, generated by the proxy rather than copied from the client. The common wrong implementation is to accept whatever the H2 client sends and copy header fields verbatim into the H1 request, which is how H2.CL and H2.TE smuggling primitives get born.
+10. Normalize the host string before allowlist comparison: lowercase, IDNA/punycode-encode, strip a single trailing dot, canonicalize IPv6 to bracketed compressed form, and reject any residual whitespace, userinfo, or non-LDH characters. The invariant is that the validator and every downstream sink see the same canonical byte string. The common wrong implementation is `host.endswith(".example.com")` (or equivalent) applied to the raw header, which every normalization trick in technique 11 defeats.
 
 ## Interview-grade nuances
 
@@ -175,6 +193,13 @@ Treat `Host` like any other injectable header: if it reaches a SQL statement, te
 - Component disagreement is the unifying theme across duplicate `Host`, absolute-URI, and line-wrapping tricks: validation and the vulnerable sink parse the request differently, which is the same primitive that powers request smuggling, and smuggling techniques port directly into Host header attacks.
 - Connection-state attacks exploit the assumption that `Host` is constant per connection; that holds for browsers but not for a manual client reusing a keep-alive socket, which is why testing must reuse connections deliberately.
 - The definitive prevention answer is "stop deriving identity from the header": relative URLs, config-driven canonical domain, framework allowlist, and proxy-level back-end allowlisting, in that order.
+
+## Interviewer probes
+
+- Mid: Why is calling HTTP/2 a mitigation for Host attacks incomplete in practice?
+- Principal: Because most H2 deployments terminate at the edge and downgrade to HTTP/1.1 for the origin, and that rewrite is a new attacker surface, not a removal of one. If the proxy trusts `:authority` for routing but copies the client-supplied `Host` field verbatim into the H1 request it emits, the back-end sees `Host: attacker.com` even though the front-end validated `victim.com`. The same downgrade is the substrate for H2.CL and H2.TE smuggling, where CRLF, oversized, or duplicate values in H2 header fields get spliced into the upstream H1 request. The correct posture at the boundary is to re-derive `Host` from `:authority`, reject H2 requests where `Host` is present and disagrees with `:authority`, and enforce RFC 9113 forbidden-characters checks on all header values before serializing to H1.
+- Mid: How does an attacker slip a lookalike host past an ASCII allowlist?
+- Principal: Any parser gap between validator and sink is exploitable. The concrete primitives are: a trailing dot that a DNS resolver strips but a string allowlist does not, punycode A-labels (`xn--...`) that pass ASCII checks but render as the target's U-label in the email a victim receives, Unicode dot equivalents (U+3002, U+FF0E) that some parsers treat as label separators, mixed-case comparisons against case-insensitive DNS, and userinfo/whitespace tolerated by permissive parsers. The defense is to normalize before comparing: lowercase, IDNA-encode, strip a single trailing dot, canonicalize IPv6, and reject anything with whitespace, userinfo, or non-LDH characters, then match the normalized full host exactly. String `endswith` on the raw header is the anti-pattern that every one of these bypasses.
 
 ## Sources
 

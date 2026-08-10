@@ -127,6 +127,47 @@ Set-Cookie: __Host-SessionID=<64-bit-entropy-value>; Secure; HttpOnly; SameSite=
 - **Over-broad `Domain`**: `Domain=example.com` shares the cookie across all subdomains, so a bug in `www` can compromise `secure.example.com` and enable cross-subdomain fixation. Omit `Domain` (host-only) and scope `Path` tightly.
 - **Tokens in `localStorage`/`sessionStorage`**: any JavaScript in the origin can read them, so one XSS discloses every token; they also lack cookie protections. Use `HttpOnly; Secure; SameSite` cookies (or a Backend-for-Frontend pattern; a Web Worker can hold a secret in memory when JS access is truly required).
 
+### 7. Login CSRF (forced authentication as the attacker)
+
+Login CSRF is the mirror of classic CSRF. Instead of riding the victim's authenticated session to perform an action, the attacker submits their own credentials via a cross-site request so the victim's browser ends up authenticated to the attacker's account. Every action the victim then performs (saving a payment method, uploading a document, chatting with an assistant, granting an OAuth consent) lands in the attacker's account, which the attacker can later sign back into and exfiltrate.
+
+```html
+<!-- attacker.example serves this to a logged-out victim -->
+<form action="https://target.example/login" method="POST" id="f">
+  <input name="username" value="attacker@evil.com">
+  <input name="password" value="AttackerPassword1!">
+</form>
+<script>document.getElementById('f').submit();</script>
+```
+
+The pattern gets worse in SSO and account-linking flows. If the victim's browser holds an attacker-planted session when they click a legitimate "link Google account" or "connect wallet" button, the victim's real identity gets stitched onto the attacker's account. Some OAuth authorization-code flows are similarly abusable when the login step is CSRF-eligible, which is one of the reasons the `state` parameter is mandatory.
+
+The fix is to treat the login POST as a state-changing action rather than an idempotent read. Emit an anti-CSRF token on the pre-auth page and require it on submit, set `SameSite=Strict` (or at minimum `Lax`) on any pre-auth cookie the flow relies on, and verify `Origin`/`Referer` on the login endpoint. Interviewers use this to check that the candidate does not believe "CSRF only matters after authentication".
+
+### 8. Cookie tossing (subdomain cookie override)
+
+Cookie tossing is the concrete attack the `__Host-` prefix defends against. An attacker who controls or XSSes a sibling subdomain (`blog.example.com`, `staging.example.com`, an abandoned marketing property) issues a `Set-Cookie` for `Domain=example.com` with a chosen `Path`, and the browser will attach that planted cookie to requests to `secure.example.com` alongside (or instead of) the legitimate one.
+
+```
+# Attacker controls blog.example.com and responds with:
+Set-Cookie: SessionID=ATTACKER_KNOWN_VALUE; Domain=example.com; Path=/
+
+# Browser now sends BOTH cookies to secure.example.com:
+Cookie: SessionID=ATTACKER_KNOWN_VALUE; SessionID=<victim-legit>
+```
+
+RFC 6265 does not mandate an ordering the server can reliably disambiguate between a host-only cookie and a domain cookie of the same name, so the target server frequently reads the attacker's planted value first. If the app also has a permissive session model, that is session fixation across the subdomain boundary; even where fixation is blocked, the attacker has poisoned other cookies (CSRF tokens, feature flags, cart state) that the auth surface trusts. A related shape is a network attacker on cleartext HTTP for any sibling subdomain planting the same cookie, which `Secure` alone does not prevent because the browser writes it into the shared jar.
+
+The defenses stack: use the `__Host-` prefix so the cookie is host-only, forbids `Domain`, and forces `Path=/` over HTTPS; never share the auth cookie via `Domain=example.com`; treat every subdomain as inside the auth trust boundary and audit them for XSS and takeover; and on the server reject requests that present duplicate cookies of the same name rather than picking one. The senior answer names the attack, not just the prefix.
+
+### 9. Magic-link login (passwordless email flows)
+
+Magic-link login (email-a-link, click-to-sign-in patterns popularized by Slack, Notion, and Substack) shares the password-reset flow's weaknesses and adds new ones specific to being a login primitive. The link itself is a bearer token in a URL, so it leaks via `Referer` when the confirmation page loads third-party assets, via browser history, via corporate email-security link-rewriters that pre-fetch the URL to inspect it (which can burn a single-use token before the user clicks), and via shared mailboxes and forwarded messages.
+
+Attackers exploit two shapes. The pre-fetch race: an enterprise mail scanner or preview generator hits the link first, consuming the token, so the user's click fails; the user then requests a new link, and the flood of expiring tokens plus repeated emails is a phishing amplifier. The MFA-skip shape: many magic-link implementations treat "email delivery" as the second factor and drop TOTP/WebAuthn on the click, so an attacker who compromises the inbox (credential stuffing on the mail provider, session cookie theft, or a rogue Gmail add-on) inherits the target account without ever facing MFA.
+
+The defense is to bind the token to the browser that requested it: set a pre-auth cookie at request time and require the same cookie be present when the link is clicked, so a link opened in a different browser or by an inline mail scanner fails closed. Keep tokens short-lived and single-use, still require MFA (or step-up) on the click even for magic-link flows, land on a POST-confirmation page instead of GET-on-click so link scanners cannot silently consume the token, and set `Referrer-Policy: noreferrer` on the confirmation page. The interview trap is claiming passwordless removes the shared secret without acknowledging that a magic link *is* a shared secret with a delivery channel weaker than TLS.
+
 ## Defense
 
 Ordered by effectiveness.
@@ -152,6 +193,7 @@ Ordered by effectiveness.
 - **Host-header reset poisoning is the named pattern to reach for.** If asked how a password reset can be attacked without XSS or a network position, "the app builds the reset URL from the Host header, so I poison it to my domain and receive the victim's token" is the expected answer, along with the fix (allowlisted host, never the header).
 - **Passwordless is the strategic answer, not just a control.** WebAuthn/passkeys remove the phishable shared secret entirely, which is why "move to phishing-resistant MFA" outranks "add another OTP" when the interviewer pushes on defense priority.
 - **Reset tokens: single-use and host-safe, not merely expiring.** "Our tokens expire in 15 minutes" is insufficient if they are replayable, unbound to the account, or leak via Referer. Enumerate all four properties (long, single-use, expiring, account-bound) plus delivery hygiene.
+- **"Would you bind the session cookie to the client IP?"** Tempting and mostly wrong for consumer apps. Strict IP or /24 binding raises the bar on stolen-cookie replay but breaks legitimate users: mobile carriers rotate IPs, corporate egress NAT churns, and IPv6 privacy addresses change; you will page support every time a user walks from Wi-Fi to LTE. User-Agent binding is nearly free and catches naive theft, but modern attackers replay the UA header, so treat it as a weak sanity check, not a control. TLS-fingerprint (JA3) and full device fingerprints have similar false-positive problems and privacy costs. The senior answer is to bind loosely, log the drift, and feed coarser signals (ASN change, country change, impossible travel) into risk-based step-up or re-authentication rather than hard-invalidating the session. Strict binding is defensible only for narrow high-assurance internal tools where the user population and network egress are known.
 
 ## Sources
 

