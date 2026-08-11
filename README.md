@@ -149,6 +149,7 @@ This is a **revision aid, not a tutorial**. It assumes deep prior knowledge and 
 |---|-------|-------|
 | 17 | [Cryptographic failures](docs/17-cryptographic-failures.md) | KDF tuning, padding oracle, IV/nonce reuse, length extension, AEAD |
 | 19 | [Security misconfiguration & headers](docs/19-security-misconfiguration-headers.md) | Debug-to-RCE, exposed surfaces, the full security-header suite |
+| 83 | [Zero Trust Architecture](docs/83-zero-trust.md) | NIST SP 800-207 tenets, PE/PA/PEP, 800-207A cloud-native workload identity, 1800-35 implementation, CISA ZTMM v2.0, deployment variants, ZT for AI agents |
 
 ## Suggested revision order
 
