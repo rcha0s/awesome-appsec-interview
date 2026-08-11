@@ -106,7 +106,7 @@ sequenceDiagram
     end
 
     Note over W: Workload reconnects before expiry; Agent streams new SVIDs
-    Note over W,A: Attack surface: <br/>1) UDS reachable by co-tenant? <br/>2) Selectors forgeable? <br/>3) Bundle federation authenticated?
+    Note over W,A: Attack surface: 1) UDS reachable by co-tenant? 2) Selectors forgeable? 3) Bundle federation authenticated?
 ```
 
 ### Federation

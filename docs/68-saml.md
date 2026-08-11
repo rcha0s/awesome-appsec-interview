@@ -108,14 +108,14 @@ sequenceDiagram
     U->>SP: GET /app (no session)
     SP->>U: 302 to IdP SSO endpoint, sets AuthnRequest with ID=_r9f2c
     U->>IdP: GET /sso?SAMLRequest=...&RelayState=/dashboard
-    Note over A,IdP: Attack surface: Redirect-binding sig<br/>covers raw query string, not decoded XML
+    Note over A,IdP: Attack surface: Redirect-binding sig. covers raw query string, not decoded XML
     IdP->>U: Login page, MFA, consent
     U->>IdP: Credentials
     IdP->>U: 200 auto-POST form with signed Response
-    Note over A,U: Attack surface: comment truncation<br/>on NameID, XSW on Assertion,<br/>RelayState open redirect
+    Note over A,U: Attack surface: comment truncation. on NameID, XSW on Assertion, RelayState open redirect
     U->>SP: POST /acs (SAMLResponse=..., RelayState=/dashboard)
     SP->>SP: 1) Parse XML  2) Verify signature by ID reference<br/>3) Read Subject/Conditions/Attributes<br/>4) Check Destination/Audience/InResponseTo/NotOnOrAfter
-    Note over SP,A: Attack surface: parse != verify.<br/>Verifier reads signed node, app reads<br/>attacker-injected sibling.
+    Note over SP,A: Attack surface: parse != verify. Verifier reads signed node, app reads. attacker-injected sibling.
     SP->>U: 302 to RelayState target, sets session cookie
 ```
 

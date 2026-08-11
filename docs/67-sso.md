@@ -95,14 +95,14 @@ sequenceDiagram
   IdP->>IdP: authenticate user (password + MFA)
   IdP->>U: signed Response, InResponseTo=_a7b3
   U->>SP: POST /acs (Response, RelayState)
-  Note over SP: verify signature, aud, issuer,<br/>InResponseTo matches stored ID,<br/>window, not-replayed
+  Note over SP: verify signature, aud, issuer, InResponseTo matches stored ID, window, not-replayed
   SP->>U: Set-Cookie: sp_session=...; redirect /dashboard
 
   Note over U,IdP: IdP-initiated (dangerous surface)
   U->>IdP: click "Launch App" tile
   IdP->>U: signed Response, NO InResponseTo
   U->>SP: POST /acs (unsolicited)
-  Note over SP: if SP accepts,<br/>attacker can inject stolen<br/>or replayed assertions
+  Note over SP: if SP accepts, attacker can inject stolen or replayed assertions
 ```
 
 ### Session model after successful SSO

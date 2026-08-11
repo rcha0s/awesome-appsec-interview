@@ -63,7 +63,7 @@ sequenceDiagram
     P->>P: classify(tool): irreversible? scope? cost?
     alt requires HITL
         P->>UI: render(name, args, policy_reason, default=Deny)
-        Note over UI: UI writes prompt from runtime state,<br/>NOT from model output
+        Note over UI: UI writes prompt from runtime state, NOT from model output
         UI->>U: Approve? (fresh, OOB, timeout=Deny)
         U-->>UI: sign(hash(name, canonical(args), nonce, ts))
         UI->>P: signed_decision

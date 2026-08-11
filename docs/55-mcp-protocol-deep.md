@@ -137,11 +137,11 @@ sequenceDiagram
     S-->>C: {resources:[...]}
     C->>S: prompts/list
     S-->>C: {prompts:[...]}
-    Note over H,S: attack surface: tool descriptions, resource URIs,<br/> prompt templates, server instructions all flow into the model prompt
+    Note over H,S: attack surface: tool descriptions, resource URIs, prompt templates, server instructions all flow into the model prompt
     H->>C: user asks LLM to do a task
     C->>S: tools/call {name, arguments}
     S-->>C: {content:[...]}
-    Note over S,C: server can now initiate:<br/> sampling/createMessage,<br/> elicitation/create,<br/> roots/list (via client),<br/> logging/message
+    Note over S,C: server can now initiate: sampling/createMessage, elicitation/create, roots/list (via client), logging/message
     S->>C: sampling/createMessage {messages, systemPrompt, includeContext}
     C->>H: prompt user to approve sampling
     H-->>C: approve
