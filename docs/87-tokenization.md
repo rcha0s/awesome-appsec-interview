@@ -183,7 +183,7 @@ Q3. What is the FF3 attack and when does it matter?
 
 Mid: FF3 is a format-preserving encryption scheme that had a cryptanalytic attack published; it is weaker than expected for small domains.
 
-Principal: a 2016 CCS paper published a chosen-plaintext attack that reduced FF3 security substantially below the claimed level<sup>[[3]](#ref3)</sup>, prompting NIST to revise the standard to FF3-1<sup>[[7]](#ref7)</sup>. A 2017 CRYPTO paper then broke FF3 outright over small domains<sup>[[4]](#ref4)</sup>. It matters when the domain is small (BIN-constrained PANs are effectively a 10^10 domain) and when the tokenization service accepts chosen input, which is the normal operating mode. Practical answer: prefer random-surrogate tokenization over FPE, and if legacy schema pressure forces FPE, use FF1 with adequate domain size and gate the tokenize endpoint heavily so it is not a public chosen-plaintext oracle.
+Principal: a 2016 CCS paper published a chosen-plaintext attack that reduced FF3 security substantially below the claimed level<sup>[[3]](#ref3)</sup>, prompting NIST to revise the standard to FF3-1<sup>[[7]](#ref7)</sup>. A 2017 CRYPTO paper then broke FF3 outright over small domains<sup>[[4]](#ref4)</sup>. It matters when the domain is small (BIN-constrained PANs are effectively a 10^10 domain) and when the tokenization service accepts chosen input, which is the normal operating mode. Prefer random-surrogate tokenization over FPE; if legacy schema pressure forces FPE, use FF1 with adequate domain size and gate the tokenize endpoint heavily so it is not a public chosen-plaintext oracle.
 
 Q4. Walk through the design of per-caller scoping on de-tokenization.
 
