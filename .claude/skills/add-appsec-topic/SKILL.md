@@ -91,13 +91,13 @@ const REPO = '/Users/risawe/Desktop/security/awesome-appsec-interview'
 const OUTFILE = `${REPO}/docs/<NN>-<slug>.md`
 
 const SHAPE_SPEC = `
-DOC SHAPE (per ADR-0001, see docs/adr/0001-doc-format-prose-first.md and CONTEXT.md). Every doc follows this shape EXACTLY.
+DOC SHAPE (per ADR-0001 as amended by ADR-0002, see docs/adr/ and CONTEXT.md). Every doc follows this shape EXACTLY.
 
 Section order:
   1. \`#\` Title on line 1.
-  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences, states the root cause so an interviewer can quote it back). ONLY title and this blockquote appear before ## Quick reference.
-  3. \`## Quick reference\` containing exactly (a) a wire-level example code block (real bytes / JSON / HTTP / protocol frame), then (b) the invariants table (columns Invariant | Where enforced | How violated | Source; 3-8 rows). Source column names the spec in plain text (URL lives in numbered Sources). Nothing else in Quick reference.
-  4. \`## How it works\` (mechanism / architecture / protocol). Uses \`###\` sub-headings where natural. Diagrams (mermaid) live here.
+  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences, states the root cause so an interviewer can quote it back). ONLY title and this blockquote appear before ## How it works.
+  3. \`## How it works\` (mechanism / architecture / protocol). Uses \`###\` sub-headings where natural. Diagrams (mermaid) live here. Runs BEFORE Quick reference because the invariants table is easier to load after the reader has the architecture context.
+  4. \`## Quick reference\` containing exactly (a) a wire-level example code block (real bytes / JSON / HTTP / protocol frame), then (b) the invariants table (columns Invariant | Where enforced | How violated | Source; 3-8 rows). Source column names the spec in plain text (URL lives in numbered Sources). Nothing else in Quick reference.
   5. \`## Attack techniques\`: enumerated with \`### N. <name>\` sub-headings. Each technique body is prose (2-4 short paragraphs) that WEAVES all four rubric elements without bolded sub-heads: mechanism, payload/example, black-box + blind/OOB confirmation, escalation. Do NOT use \`**Mechanism.**\`, \`**Payload.**\`, \`**Black-box confirmation.**\`, \`**Escalation.**\` bolded sub-heads.
   6. \`## Defense\`: split into \`### Real fix\` and \`### Defense in depth\` sub-headings. Numbered items within each cluster, ordered by effectiveness. Each states invariant enforced, why it works, common wrong implementation, source. Clickable [N] refs.
   7. \`## Detection and telemetry\` (log fields, alerts, canary shapes; prose; no [N] required).
