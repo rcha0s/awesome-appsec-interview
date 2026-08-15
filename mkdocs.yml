@@ -70,6 +70,7 @@ nav:
     - XXE Injection: 06-xxe.md
     - SSTI: 07-ssti.md
     - Insecure Deserialization: 08-insecure-deserialization.md
+    - SSRF: 04-ssrf.md
     - File Upload: 10-file-upload.md
 
   - Authentication & Identity:
@@ -92,7 +93,6 @@ nav:
   - Access Control:
     - Access Control & IDOR: 15-access-control-idor.md
     - Business Logic & Race Conditions: 16-business-logic-race-conditions.md
-    - SSRF: 04-ssrf.md
 
   - Client-Side:
     - client-side/index.md
