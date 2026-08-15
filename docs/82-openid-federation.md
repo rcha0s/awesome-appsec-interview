@@ -95,7 +95,7 @@ sequenceDiagram
     Note over OP: Verify each trust_mark JWT with TMI keys
 
     OP-->>RP: authorization_response (client_id bound to RP entity)
-    Note right of OP: Attack surface:<br/>1. TA key theft<br/>2. Cycle in authority_hints<br/>3. Fetch SSRF<br/>4. Policy override skip<br/>5. TM issuer key theft
+    Note right of OP: Attack surface: 1. TA key theft, 2. Cycle in authority_hints, 3. Fetch SSRF, 4. Policy override skip, 5. TM issuer key theft
 ```
 
 ### Metadata policy

@@ -75,7 +75,7 @@ sequenceDiagram
     C->>S: Certificate (leaf + intermediates)
     C->>S: CertificateVerify (sig over transcript)
     C->>S: Finished
-    Note over N: sees only ciphertext under HS keys<br/>attack surface: TLS-terminating proxy, trust store, SAN matching, revocation
+    Note over N: sees only ciphertext under HS keys. attack surface: TLS-terminating proxy, trust store, SAN matching, revocation
     S->>C: Application Data
     C->>S: Application Data
 ```

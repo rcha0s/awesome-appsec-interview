@@ -82,21 +82,21 @@ sequenceDiagram
     Front->>AS: code exchange, resource=https://mid.example.com
     AS-->>Front: subject_token aud=mid.example.com, may_act={mid-tier-svc}
     Front->>Mid: request with subject_token
-    Note over Mid: Middle tier now holds Alice's token,<br/>needs to call backend on her behalf
+    Note over Mid: Middle tier now holds Alice's token, needs to call backend on her behalf
     Mid->>AS: POST /token grant_type=token-exchange<br/>subject_token=(Alice's), actor_token=(mid-tier-svc mTLS-authed),<br/>resource=https://backend.example.com/api, scope=read:orders
-    Note over AS: 1. Validate subject_token sig+exp+revocation<br/>2. Check may_act allows mid-tier-svc<br/>3. Intersect requested scope with subject scope<br/>4. Bind aud to backend resource<br/>5. Attach act={sub:mid-tier-svc}
+    Note over AS: 1. Validate subject_token sig+exp+revocation. 2. Check may_act allows mid-tier-svc. 3. Intersect requested scope with subject scope. 4. Bind aud to backend resource. 5. Attach act={sub:mid-tier-svc}
     AS-->>Mid: access_token aud=urn:example:backend, act={mid-tier-svc}, scope=read:orders, exp=300
     Mid->>Back: GET /orders Authorization: Bearer <exchanged>
-    Note over Back: Validate iss, aud=urn:example:backend,<br/>exp, sig, scope contains read:orders,<br/>optionally enforce policy on act.sub
+    Note over Back: Validate iss, aud=urn:example:backend, exp, sig, scope contains read:orders, optionally enforce policy on act.sub
     Back-->>Mid: 200 OK (orders for Alice)
     Mid-->>Front: response
     Front-->>User: rendered result
 
     rect rgba(255,180,180,0.35)
-      Note over Mid,AS: Attack surface: unbounded audience,<br/>missing may_act check, scope copy-through,<br/>public client on token endpoint
+      Note over Mid,AS: Attack surface: unbounded audience, missing may_act check, scope copy-through, public client on token endpoint
     end
     rect rgba(255,180,180,0.35)
-      Note over Mid,Back: Attack surface: RS ignores aud,<br/>RS ignores act, RS accepts any issuer
+      Note over Mid,Back: Attack surface: RS ignores aud, RS ignores act, RS accepts any issuer
     end
 ```
 

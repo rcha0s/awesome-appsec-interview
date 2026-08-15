@@ -91,13 +91,13 @@ const REPO = '/Users/risawe/Desktop/security/awesome-appsec-interview'
 const OUTFILE = `${REPO}/docs/<NN>-<slug>.md`
 
 const SHAPE_SPEC = `
-DOC SHAPE (per ADR-0001, see docs/adr/0001-doc-format-prose-first.md and CONTEXT.md). Every doc follows this shape EXACTLY.
+DOC SHAPE (per ADR-0001 as amended by ADR-0002, see docs/adr/ and CONTEXT.md). Every doc follows this shape EXACTLY.
 
 Section order:
   1. \`#\` Title on line 1.
-  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences, states the root cause so an interviewer can quote it back). ONLY title and this blockquote appear before ## Quick reference.
-  3. \`## Quick reference\` containing exactly (a) a wire-level example code block (real bytes / JSON / HTTP / protocol frame), then (b) the invariants table (columns Invariant | Where enforced | How violated | Source; 3-8 rows). Source column names the spec in plain text (URL lives in numbered Sources). Nothing else in Quick reference.
-  4. \`## How it works\` (mechanism / architecture / protocol). Uses \`###\` sub-headings where natural. Diagrams (mermaid) live here.
+  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences, states the root cause so an interviewer can quote it back). ONLY title and this blockquote appear before ## How it works.
+  3. \`## How it works\` (mechanism / architecture / protocol). Uses \`###\` sub-headings where natural. Diagrams (mermaid) live here. Runs BEFORE Quick reference because the invariants table is easier to load after the reader has the architecture context.
+  4. \`## Quick reference\` containing exactly (a) a wire-level example code block (real bytes / JSON / HTTP / protocol frame), then (b) the invariants table (columns Invariant | Where enforced | How violated | Source; 3-8 rows). Source column names the spec in plain text (URL lives in numbered Sources). Nothing else in Quick reference.
   5. \`## Attack techniques\`: enumerated with \`### N. <name>\` sub-headings. Each technique body is prose (2-4 short paragraphs) that WEAVES all four rubric elements without bolded sub-heads: mechanism, payload/example, black-box + blind/OOB confirmation, escalation. Do NOT use \`**Mechanism.**\`, \`**Payload.**\`, \`**Black-box confirmation.**\`, \`**Escalation.**\` bolded sub-heads.
   6. \`## Defense\`: split into \`### Real fix\` and \`### Defense in depth\` sub-headings. Numbered items within each cluster, ordered by effectiveness. Each states invariant enforced, why it works, common wrong implementation, source. Clickable [N] refs.
   7. \`## Detection and telemetry\` (log fields, alerts, canary shapes; prose; no [N] required).
@@ -113,8 +113,29 @@ CLICKABLE REFERENCES:
   - Inline: \`<sup>[[N]](#refN)</sup>\` (superscript). Not bare \`[N]\`.
   - Sources entry: \`<a id="refN"></a>[N] Title. Venue. Date. URL.\`
 
-STYLE:
-  - No em-dashes. No inline author names in prose. No warm-up generalities. Prose over stacked bullets. Bold sparingly.
+STYLE (writing-style skill rules, applied verbatim):
+
+Sentence-level:
+  1. No "Whether X or Y, ..." openers.
+  2. No "The X? The Y." or "The X: The Y." Say "The X is Y" or cut the setup.
+  3. No "It's more than X. It's Y." and no "Not X, Y." constructions. Just say Y.
+  4. Three-item lists: ask if two items covers it. Vary structure across the doc.
+  5. No general-then-colon-specifics. "Delivers where it counts: X and Y" becomes "Delivers X and Y."
+  6. No purpose-clause endings ("... to help teams stay agile"). Cut them.
+  7. Word swaps: "but" over "yet"; "because" or "so" over "since" unless temporal; cut "as a result", "this means", "consequently", "therefore".
+  8. No em-dashes anywhere. Commas, periods, colons, or parens.
+  9. No signposting labels: "Concretely,", "Bottom line:", "Net:", "Verdict:", "To be clear,", "In short,". Deliver the claim.
+  10. No staccato-fragment emphasis ("Real. Not hypothetical."). Plain sentence.
+
+Structural:
+  11. AI-shaped paragraph (general opener + specific application + three-item list + em-dash summary): rewrite.
+  12. Do not open a section with a warm-up generality. Start on the specific claim.
+  13. Say the point, do not circle it. Do not talk about the point; be the point.
+  14. Bulleted lists: if every bullet uses the same syntactic template (bold noun, colon, description), vary or convert to prose.
+  15. Bold sparingly. Bolding every 2-3 lines flattens emphasis to zero.
+
+Doc-specific:
+  - No inline author names in prose. Sources entries name venue + URL.
   - Length: 300 to 700 lines. No filler.
 
 DIAGRAMS:
@@ -139,6 +160,20 @@ Flag:
   - Presence of removed sections (Interview-grade nuances, Spec / RFC anchors standalone)
   - Bolded rubric sub-heads inside Attack techniques
   - Missing Defense split into Real fix + Defense in depth
+Writing-style violations (writing-style skill rules 1-15):
+  - Em-dashes anywhere in prose (rule 8; strongest AI tell)
+  - "Whether X or Y," openers (rule 1)
+  - "The X? The Y." or "The X: The Y." constructions (rule 2)
+  - "Not X, Y." or "Not X. Y." constructions (rule 3)
+  - Purpose-clause endings like "... to help teams stay agile" (rule 6)
+  - "yet"/"as a result"/"this means"/"consequently"/"therefore"/"since" (temporal only) (rule 7)
+  - Signposting labels: "Concretely,", "Bottom line:", "Net:", "Verdict:", "To be clear,", "In short," (rule 9)
+  - Staccato-fragment emphasis ("Real. Not hypothetical.") (rule 10)
+  - AI-shaped paragraphs (general opener + specific + three-item list + em-dash summary) (rule 11)
+  - Section openings with warm-up generalities (rule 12)
+  - Sentences that talk about the point rather than being the point (rule 13)
+  - Bulleted lists where every bullet is `**bold**: description` (rule 14)
+  - Bolding every 2-3 lines (rule 15)
 Output STRICT JSON array. Each finding: {"line_or_section": <string>, "issue": <one sentence>, "severity": "critical"|"high"|"medium"|"low", "fix": <one sentence>}. Empty [] if none.
 `
 

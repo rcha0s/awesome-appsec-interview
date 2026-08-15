@@ -75,13 +75,13 @@ sequenceDiagram
     B->>B: Verify rpId is suffix of origin (eTLD+1)
     B->>B: Build clientDataJSON<br/>{type:"webauthn.get", challenge, origin, crossOrigin}
     B->>A: authenticatorGetAssertion(rpIdHash, SHA256(clientDataJSON), UV=required)
-    Note right of A: Attack surface:<br/>malicious page tries<br/>wrong rpId, browser rejects
+    Note right of A: Attack surface: malicious page tries wrong rpId, browser rejects
     A->>U: Prompt biometric / PIN
     U-->>A: Consent
     A-->>B: authData (rpIdHash, flags, signCount) + signature
     B-->>RP: credential.id, authData, clientDataJSON, signature, userHandle
     RP->>RP: origin match, rpIdHash match, challenge match,<br/>UP/UV flags, signCount > stored, verify sig
-    Note over RP: Any check skipped = auth still "works"<br/>but silently downgraded
+    Note over RP: Any check skipped = auth still "works". but silently downgraded
     RP-->>B: session cookie
 ```
 

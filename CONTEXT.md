@@ -64,8 +64,8 @@ Every doc follows this order:
 
 1. `#` Title.
 2. Blockquote mental-model paragraph.
-3. `## Quick reference` (wire example, invariants table).
-4. `## How it works` (mechanism / architecture / protocol; uses `###` sub-headings where natural; diagrams live here).
+3. `## How it works` (mechanism / architecture / protocol; uses `###` sub-headings where natural; diagrams live here). Runs before Quick reference because the invariants table is easier to load after the reader has the architecture.
+4. `## Quick reference` (wire example, invariants table).
 5. `## Attack techniques` (numbered `### N. <name>` sub-headings, prose bodies with woven rubric).
 6. `## Defense` ("Real fix" cluster then "Defense in depth" cluster; numbered items with clickable `[N]` refs).
 7. `## Detection and telemetry` (log fields, alerts, canary shapes; no `[N]` required).

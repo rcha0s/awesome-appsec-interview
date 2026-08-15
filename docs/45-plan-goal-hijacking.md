@@ -75,13 +75,13 @@ sequenceDiagram
   T-->>O: observation string
   O->>O: scratchpad.append(observation)
   O->>P: prompt = system + user + updated scratchpad
-  Note over P: Planner reads scratchpad, sees<br/>"[SYSTEM NOTICE] NEW OBJECTIVE".<br/>Attention binds the string to<br/>the objective slot.
-  P-->>O: Thought: "objective updated"<br/>Action: fs_search / read_file / send_email
+  Note over P: Planner reads scratchpad, sees. "[SYSTEM NOTICE] NEW OBJECTIVE". Attention binds the string to. the objective slot.
+  P-->>O: Thought "objective updated", Action fs_search / read_file / send_email
   O->>S: side-effecting call dispatched
   S-->>W: exfil
   P-->>O: final response (benign-looking summary)
   O-->>U: benign response
-  Note over S,W: OOB confirmation: attacker inbox,<br/>webhook, DNS, on-chain tx.
+  Note over S,W: OOB confirmation: attacker inbox, webhook, DNS, on-chain tx.
 ```
 
 ### Why each element exists and how it fails

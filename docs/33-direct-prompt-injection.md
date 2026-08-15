@@ -44,10 +44,10 @@ sequenceDiagram
     U->>App: POST /chat {message: "Ignore previous..."}
     App->>Tpl: render(system, history, user)
     Tpl->>M: token stream [system][user][assistant]
-    Note over M: role markers are ordinary tokens<br/>attention has no privilege bit
+    Note over M: role markers are ordinary tokens. attention has no privilege bit
     M-->>App: assistant text + tool_call(issue_refund, 9999)
     App->>Tool: execute(issue_refund, 9999)
-    Note over App,Tool: no re-check that user intent authorized this tool call<br/>OWASP LLM06 Excessive Agency
+    Note over App,Tool: no re-check that user intent authorized this tool call. OWASP LLM06 Excessive Agency
     Tool-->>U: refund issued
 ```
 

@@ -66,13 +66,13 @@ sequenceDiagram
     participant BL as Breach list (HIBP k-anonymity)
 
     U->>CDN: POST /login {username, password}
-    Note over CDN: Per-IP rate limit (100/hour),<br/>bot signals, IP reputation
+    Note over CDN: Per-IP rate limit (100/hour), bot signals, IP reputation
     CDN->>App: Forward request
     App->>DB: SELECT hash, salt_meta WHERE user=?
     alt User exists
         DB-->>App: hash row
     else User missing
-        Note over App: Use dummy Argon2id hash<br/>to equalize latency
+        Note over App: Use dummy Argon2id hash. to equalize latency
         App->>App: Argon2id(dummy, salt)
     end
     App->>KMS: Fetch pepper (cached)
@@ -80,7 +80,7 @@ sequenceDiagram
     App->>App: Argon2id(HMAC(pepper, pw)) == stored
     App->>App: constant-time compare
     App-->>U: 401 identical body/headers/latency<br/>OR 200 + session
-    Note over U,BL: Attack surface: response<br/>diffing, latency oracle,<br/>error-string enumeration,<br/>credential stuffing, timing<br/>on comparison, KDF DoS.
+    Note over U,BL: Attack surface: response. diffing, latency oracle, error-string enumeration, credential stuffing, timing. on comparison, KDF DoS.
 ```
 
 ### Breach-list check at set-time

@@ -151,6 +151,26 @@ This is a **revision aid, not a tutorial**. It assumes deep prior knowledge and 
 | 19 | [Security misconfiguration & headers](docs/19-security-misconfiguration-headers.md) | Debug-to-RCE, exposed surfaces, the full security-header suite |
 | 83 | [Zero Trust Architecture](docs/83-zero-trust.md) | NIST SP 800-207 tenets, PE/PA/PEP, 800-207A cloud-native workload identity, 1800-35 implementation, CISA ZTMM v2.0, deployment variants, ZT for AI agents |
 
+### Container and orchestration
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 85 | [Kubernetes security](docs/85-kubernetes.md) | 4 Cs model, API server / kubelet / etcd, RBAC and service-account tokens, Pod Security Admission (PSA), NetworkPolicy, admission control (Kyverno/Gatekeeper), workload identity |
+| 86 | [Container escape](docs/86-container-escape.md) | Namespaces + cgroups + capabilities as the boundary, privileged/hostPath escapes, runc/CRI-O CVEs (2019-5736, 2024-21626, 2022-0847 Dirty Pipe), cgroup release_agent, gVisor / kata isolation |
+
+### Payments and money-movement
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 87 | [Payment and PII tokenization](docs/87-tokenization.md) | PSP / network (VTS/MDES) / device tokens, PCI DSS 4.0.1 scope de-scoping, token vault attacks, FPE weaknesses (FF1/FF3), keyed hashing for stored PAN |
+| 92 | [Money-movement authorization and idempotency](docs/92-money-movement-authz.md) | Per-object authz + idempotency-key replay-detection, dynamic linking (amount+payee) under PSD2 SCA, race-condition double-spend, refund/hold-vs-capture abuse, velocity limits |
+
+### Async and event-driven
+
+| # | Topic | Focus |
+|---|-------|-------|
+| 95 | [Webhooks](docs/95-webhooks.md) | HMAC-SHA256 vs JWT-signed vs mTLS webhooks, timestamp binding to prevent replay, constant-time compare, SSRF via webhook dispatch, at-least-once delivery + receiver-side idempotency |
+
 ## Suggested revision order
 
 If you are cramming, prioritise by interview frequency: **XSS, SQLi, access control/IDOR, SSRF, CSRF, auth/session, JWT, OAuth**, then request smuggling and the caching/host-header trio, then the AI/agent docs if the role touches LLM or MCP integrations.

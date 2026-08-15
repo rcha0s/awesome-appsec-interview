@@ -1,0 +1,7 @@
+# Section order: `## How it works` runs before `## Quick reference`
+
+ADR-0001 locked the section order as title, blockquote mental model, `## Quick reference` (wire example + invariants table), then `## How it works`. After reading a full pass of the AI/agent docs at that shape, the invariants table lands cold: the reader has the mental-model paragraph and then the invariants table, but not the mechanism or architecture the invariants refer to. The invariants read as assertions the reader has to take on faith and then justify from the How it works section below.
+
+Reversing the order fixes this. `## How it works` explains the architecture, the components, and the security reasons each element exists. Then `## Quick reference` presents the wire example and the invariants table as a distilled cheat-sheet built on the architecture the reader now understands. The mental-model blockquote still sits at the top as the load-in-30-seconds summary.
+
+This supersedes ADR-0001's ordering for sections 3 and 4 only. All other rules from ADR-0001 remain in effect: the blockquote mental model on line 3, the invariants table structure and columns, the `<sup>[[N]](#refN)</sup>` reference format, the split of Defense into Real fix and Defense in depth, the removal of standalone `## Spec / RFC anchors` and `## Interview-grade nuances` sections. The change affects every existing doc plus the `add-appsec-topic` skill template. Existing docs are re-ordered in a mechanical pass; the skill emits the new order from now on.

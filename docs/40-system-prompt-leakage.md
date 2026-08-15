@@ -54,13 +54,13 @@ sequenceDiagram
     participant Tools as Tool executor
     U->>App: user turn
     App->>LLM: system prompt + history + user turn
-    Note over App,LLM: system prompt contains business rules,<br/>tool schemas, sometimes secrets
+    Note over App,LLM: system prompt contains business rules, tool schemas, sometimes secrets
     LLM->>App: assistant turn (may include tool_use)
     App->>Tools: execute tool with credentials from env
     Tools->>App: tool result
     App->>LLM: tool_result appended
     LLM->>U: final assistant text
-    Note over U,LLM: Attack surface: any turn can request<br/>reproduction of system prompt tokens
+    Note over U,LLM: Attack surface: any turn can request. reproduction of system prompt tokens
 ```
 
 Two adjacent facts explain why leakage is hard to prevent purely inside the model. First, the same model must "use" the system prompt (follow its rules) while refusing to "reveal" it. That distinction lives in fine-tuning data, not in a hard rule. Second, transformers are context-mixing machines by construction, every output token can attend to every input token. There is no architectural way to render part of the input "invisible to output" while still letting it steer behavior. The correct location for tool credentials is between App and Tools, never inside the system prompt. When credentials sit in the prompt, both a leak of the prompt and a successful indirect injection in tool output can exfiltrate them.
