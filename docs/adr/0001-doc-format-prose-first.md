@@ -6,4 +6,4 @@ We are locking a prose-first order for every doc going forward: title, blockquot
 
 Inline citations render as `<sup>[[N]](#refN)</sup>` in the Attack and Defense sections only, and each `## Sources` entry ships with an `<a id="refN"></a>` anchor so refs are clickable on GitHub. Attack techniques and Defense items keep visible sub-headings (`### N. <name>` and numbered defenses), but the four-rubric coverage inside each technique (mechanism, payload, OOB confirmation, escalation) is woven into prose rather than exposed as bolded sub-heads. Reviewer agents still enforce the rubric against a checklist.
 
-This decision drives a retrofit across all 33 AI/agent docs (canary on doc 53 first, then fan-out) and an update to the `add-appsec-topic` skill so future single-doc adds emit the new shape. The full locked section list and glossary live in [CONTEXT.md](../../CONTEXT.md).
+This decision drives a retrofit across all 33 AI/agent docs (canary on doc 53 first, then fan-out) and an update to the `add-appsec-topic` skill so future single-doc adds emit the new shape. The full locked section list and glossary live in `CONTEXT.md` at the repo root.

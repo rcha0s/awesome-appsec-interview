@@ -249,7 +249,7 @@ In Entra, `signInLogs | where AppId == "<agent>" | where IPAddress != <expected>
 
 Log the following as structured events, never the token values themselves. Token issuance: `client_id`, `sub`, `aud`, `scp`, `resource`, `cnf.jkt`, `exp`, `jti`, `is_incremental`. Token exchange: parent `jti`, child `jti`, `scp` before and after, `act` claim, tool name, step id. Refresh: `client_id`, source IP, ASN, `jti_family`, redemption count. Alert on second redemption of a rotated refresh (reuse). Alert on redemption from an ASN never previously seen for that user. Tool call: tool name, resource host, `aud` seen on the outgoing bearer (hash it, do not log the token), status. Alert when a tool calls a resource whose `aud` does not match the tool's declared resource in the registry.
 
-Canary shapes come in three forms. Plant a canary refresh token in a controlled log line that no legitimate consumer reads. Any redemption at the AS is a positive signal that log-scraping exfil occurred; see [56-canary-tokens.md](./56-canary-tokens.md) and CanaryTokens.org. Register a shadow resource server at a name similar to a production internal API (`internal-svc.example.com` vs `internal.example.com`) and log every incoming `Authorization` header signature; anything hitting the shadow is a passthrough bug. Add a synthetic MCP tool `debug.echo_auth` that never returns to the LLM output stream but records the presence of an Authorization header on the tool-call boundary; any presence is a bug because the orchestrator should have stripped it.
+Canary shapes come in three forms. Plant a canary refresh token in a controlled log line that no legitimate consumer reads. Any redemption at the AS is a positive signal that log-scraping exfil occurred (see CanaryTokens.org for the canary-token pattern). Register a shadow resource server at a name similar to a production internal API (`internal-svc.example.com` vs `internal.example.com`) and log every incoming `Authorization` header signature; anything hitting the shadow is a passthrough bug. Add a synthetic MCP tool `debug.echo_auth` that never returns to the LLM output stream but records the presence of an Authorization header on the tool-call boundary; any presence is a bug because the orchestrator should have stripped it.
 
 ## Interviewer probes
 
@@ -341,4 +341,4 @@ Salt Labs, March 2024, disclosed a chain against ChatGPT plugins that let an att
 
 <a id="ref14"></a>[14] RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens. IETF. October 2021. https://datatracker.ietf.org/doc/html/rfc9068
 
-Related docs: [14-oauth-oidc.md](./14-oauth-oidc.md), [55-mcp-protocol-deep.md](./55-mcp-protocol-deep.md), [30-web-llm-attacks.md](./30-web-llm-attacks.md), [56-canary-tokens.md](./56-canary-tokens.md).
+Related docs: [14-oauth-oidc.md](./14-oauth-oidc.md), [55-mcp-protocol-deep.md](./55-mcp-protocol-deep.md), [30-web-llm-attacks.md](./30-web-llm-attacks.md).

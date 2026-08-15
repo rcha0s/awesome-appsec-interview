@@ -112,7 +112,7 @@ The `trust_marks` array in an Entity Configuration is self-attested. It is a hin
 
 ### Automatic client registration
 
-Instead of RFC 7591 dynamic client registration (see [79-dynamic-client-registration.md](./79-dynamic-client-registration.md) when present, and contrast with [14-oauth-oidc.md](./14-oauth-oidc.md) for the classic OAuth registration model), an OP receiving an authorization request with `client_id` set to an RP's entity identifier URL performs a federation resolution live. If a valid trust chain to an accepted anchor exists and the policy-composed metadata is acceptable, the OP treats the RP as a registered client for the duration of the request or caches it for a policy-driven TTL<sup>[[1]](#ref1)</sup>. The RP never pre-shares a client_id or secret with each OP. This is what lets eIDAS 2.0's EU Digital Identity Wallet ecosystem scale across 27 member states without pairwise onboarding<sup>[[2]](#ref2)</sup>.
+Instead of RFC 7591 dynamic client registration (see [14-oauth-oidc.md](./14-oauth-oidc.md) when present, and contrast with [14-oauth-oidc.md](./14-oauth-oidc.md) for the classic OAuth registration model), an OP receiving an authorization request with `client_id` set to an RP's entity identifier URL performs a federation resolution live. If a valid trust chain to an accepted anchor exists and the policy-composed metadata is acceptable, the OP treats the RP as a registered client for the duration of the request or caches it for a policy-driven TTL<sup>[[1]](#ref1)</sup>. The RP never pre-shares a client_id or secret with each OP. This is what lets eIDAS 2.0's EU Digital Identity Wallet ecosystem scale across 27 member states without pairwise onboarding<sup>[[2]](#ref2)</sup>.
 
 Compare SAML federation (see [68-saml.md](./68-saml.md)): SAML aggregates all entity metadata into one large signed XML file (SAML metadata aggregate), published by a federation operator, and every participant downloads and validates that file on a schedule<sup>[[6]](#ref6)</sup>. OpenID Federation is pull-per-request with local caching, so revocation propagates faster and the resolver only fetches what it needs.
 
@@ -184,7 +184,7 @@ An intermediate's `federation_fetch_endpoint` accepts `iss` and `sub` parameters
 
 Payload: `GET /fetch?iss=https://intermediate.example&sub=http://169.254.169.254/latest/meta-data/`. If the intermediate blindly issues an outbound GET to `sub` and reflects response bytes into an error, the attacker sees cloud metadata. Even without reflection, timing signals whether the address responded.
 
-Confirmation is the classic SSRF probe (see [30-ssrf.md](./30-ssrf.md) for full technique). Blind confirmation via Burp Collaborator-style OOB DNS.
+Confirmation is the classic SSRF probe (see [04-ssrf.md](./04-ssrf.md) for full technique). Blind confirmation via Burp Collaborator-style OOB DNS.
 
 Escalation: cloud credential theft from IMDSv1, internal admin endpoint access, or lateral movement inside the trust anchor's operator VPC.
 
@@ -204,7 +204,7 @@ Escalation: cloud credential theft from IMDSv1, internal admin endpoint access, 
 
 6. **Bind trust mark decisions to (issuer, mark_id, purpose) triples in local policy**. A mark from a known TMI does not mean any mark from that TMI grants any capability. Store an explicit table of which mark identifiers gate which authorization decisions. Common wrong implementation: accepting any valid mark as evidence of accreditation.
 
-7. **Validate `sub` on the federation fetch endpoint as an HTTPS URL matching an allow-listed pattern, and route outbound fetches through an SSRF-safe HTTP client** with a DNS resolver that rejects link-local, loopback, and private address ranges<sup>[[1]](#ref1)</sup>. See [30-ssrf.md](./30-ssrf.md). Common wrong implementation: passing `sub` directly into `http.Get`.
+7. **Validate `sub` on the federation fetch endpoint as an HTTPS URL matching an allow-listed pattern, and route outbound fetches through an SSRF-safe HTTP client** with a DNS resolver that rejects link-local, loopback, and private address ranges<sup>[[1]](#ref1)</sup>. See [04-ssrf.md](./04-ssrf.md). Common wrong implementation: passing `sub` directly into `http.Get`.
 
 ### Defense in depth
 
@@ -238,7 +238,7 @@ Canary shape: publish a leaf whose entity identifier resolves through a hidden i
 
 Mid: Dynamic registration is per-pair and unauthenticated; there is no way for an OP to know whether an RP is trustworthy. Federation adds a signed chain to a common anchor.
 
-Principal: RFC 7591 solves the mechanics of programmatic registration but leaves policy at the OP's discretion, so every OP-RP pair is an isolated decision. Federation moves policy into a shared graph. The OP evaluates the RP against a preconfigured trust anchor, applies top-down `metadata_policy` from the anchor and intermediates, and derives the effective client metadata deterministically. That means one operator (an eIDAS trust anchor, a national education federation) can enforce a floor across thousands of OPs and RPs without any pairwise onboarding, and revocation propagates through short-lived Entity Statements rather than through per-pair credential rotation<sup>[[1]](#ref1)</sup><sup>[[2]](#ref2)</sup>. Cross-link [79-dynamic-client-registration.md](./79-dynamic-client-registration.md) for the delta.
+Principal: RFC 7591 solves the mechanics of programmatic registration but leaves policy at the OP's discretion, so every OP-RP pair is an isolated decision. Federation moves policy into a shared graph. The OP evaluates the RP against a preconfigured trust anchor, applies top-down `metadata_policy` from the anchor and intermediates, and derives the effective client metadata deterministically. That means one operator (an eIDAS trust anchor, a national education federation) can enforce a floor across thousands of OPs and RPs without any pairwise onboarding, and revocation propagates through short-lived Entity Statements rather than through per-pair credential rotation<sup>[[1]](#ref1)</sup><sup>[[2]](#ref2)</sup>. Cross-link [14-oauth-oidc.md](./14-oauth-oidc.md) for the delta.
 
 ### How is this different from SAML metadata aggregates?
 
