@@ -144,7 +144,7 @@ Payload: an ordinary exchange call with `requested_token_type=urn:ietf:params:oa
 
 Black-box: issue the exchange, decode or introspect the returned token, check for the presence of a refresh token and whether it is bound (`cnf.x5t#S256` for mTLS binding, `cnf.jkt` for DPoP). Blind: attempt to reuse the refresh token from a different network path or client cert and see if it succeeds.
 
-Escalation is time: without binding, the refresh token converts a one-time compromise into persistence measured in days or weeks. See [13-jwt.md](./13-jwt.md) for the `cnf` claim mechanics and [14-oauth-oidc.md](./14-oauth-oidc.md) for sender-constrained token patterns<sup>[[4]](#ref4)</sup><sup>[[5]](#ref5)</sup>.
+Escalation is time: without binding, the refresh token converts a one-time compromise into persistence measured in days or weeks. See [13-jwt-token-security.md](./13-jwt-token-security.md) for the `cnf` claim mechanics and [14-oauth-oidc.md](./14-oauth-oidc.md) for sender-constrained token patterns<sup>[[4]](#ref4)</sup><sup>[[5]](#ref5)</sup>.
 
 ### 5. Chained exchange to strip actor identity
 

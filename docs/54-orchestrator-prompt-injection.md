@@ -262,4 +262,4 @@ GitLab Duo remote prompt injection, disclosed publicly in 2025. Security researc
 
 <a id="ref14"></a>[14] Llama 2 prompt format and control tokens (`[INST]`, `[/INST]`, `<<SYS>>`, `</s>`). Meta / Hugging Face documentation. 2023. https://huggingface.co/blog/llama2#how-to-prompt-llama-2
 
-Related docs: [30-web-llm-attacks.md](./30-web-llm-attacks.md), [55-mcp-tool-poisoning.md](./55-mcp-tool-poisoning.md), [56-agent-loop-abuse.md](./56-agent-loop-abuse.md).
+Related docs: [30-web-llm-attacks.md](./30-web-llm-attacks.md), [52-mcp-cross-server-shadowing.md](./52-mcp-cross-server-shadowing.md), [45-plan-goal-hijacking.md](./45-plan-goal-hijacking.md).

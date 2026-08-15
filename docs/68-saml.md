@@ -165,7 +165,7 @@ Payload style: wrap the signed Assertion in a parent element that redeclares `xm
 
 If the SP does not cache a per-request `RequestID` and enforce `InResponseTo` on the Response, an attacker who captures a valid Assertion (via XSS on the SP, a shared corporate proxy, a browser extension, or a compromised endpoint) can replay it minutes or hours later. If `NotOnOrAfter` skew is generous or missing, the window is longer. If `SubjectConfirmationData/@Recipient` is not checked, the assertion may be replayed to a *different* SP that trusts the same IdP<sup>[[6]](#ref6)</sup>.
 
-Payload: capture a real assertion, resubmit to `/acs`. Blind confirmation: watch for a session cookie tied to the victim's NameID. Escalation: full impersonation for the assertion window. Chain with token-theft primitives ([13-jwt.md](./13-jwt.md) covers the bearer-token replay class in general).
+Payload: capture a real assertion, resubmit to `/acs`. Blind confirmation: watch for a session cookie tied to the victim's NameID. Escalation: full impersonation for the assertion window. Chain with token-theft primitives ([13-jwt-token-security.md](./13-jwt-token-security.md) covers the bearer-token replay class in general).
 
 ### 6. IdP-initiated unsolicited assertion and login-CSRF
 
@@ -207,11 +207,11 @@ Payload: attacker with mail-in-the-middle sends the SP admin a "please update ou
 
 1. **Disable the HTTP-Redirect binding for `<samlp:Response>` and prefer HTTP-POST for identity-bearing messages.** Redirect-signature-over-octets is subtly correct across libraries; POST-signature-over-XML has one canonical form and a much smaller attack surface. Redirect stays useful for AuthnRequest.
 2. **Disable IdP-initiated / unsolicited assertions unless a specific SP endpoint needs it.** Require `InResponseTo` for every request-response pair. On the endpoints that must accept unsolicited assertions, bind them to a browser-set nonce cookie so the assertion cannot be injected cross-user.
-3. **Reject XML with DOCTYPE, external entities, or processing instructions before signature verification.** XXE and entity expansion combine with SAML parsing; see [15-injection.md](./15-injection.md). Configure the XML parser with `disallow-doctype-decl` true, `external-general-entities` false, `external-parameter-entities` false, `load-external-dtd` false.
+3. **Reject XML with DOCTYPE, external entities, or processing instructions before signature verification.** XXE and entity expansion combine with SAML parsing; see [06-xxe.md](./06-xxe.md). Configure the XML parser with `disallow-doctype-decl` true, `external-general-entities` false, `external-parameter-entities` false, `load-external-dtd` false.
 4. **Encrypt assertions when they cross untrusted networks, using AES-GCM, and pin the SP's encryption key separately from the signing key.** Encryption is not a substitute for signature checks; see [17-cryptographic-failures.md](./17-cryptographic-failures.md) for XML Encryption CBC oracle history<sup>[[11]](#ref11)</sup>.
 5. **Log the DigestValue of each accepted Assertion and detect duplicates within the replay window.** Even with `InResponseTo` and `NotOnOrAfter`, a per-assertion single-use cache is cheap insurance against clock-skew replay.
 6. **Rotate IdP signing keys on a schedule and drill the rotation.** A rotation the operators cannot execute becomes an outage that becomes a policy exception that becomes a permanently-installed attacker key<sup>[[15]](#ref15)</sup>.
-7. **Prefer OIDC for new integrations.** SAML remains dominant in enterprise SSO but OIDC's compact JWT ([13-jwt.md](./13-jwt.md), [14-oauth-oidc.md](./14-oauth-oidc.md)) eliminates the XML-signature-scope class entirely.
+7. **Prefer OIDC for new integrations.** SAML remains dominant in enterprise SSO but OIDC's compact JWT ([13-jwt-token-security.md](./13-jwt-token-security.md), [14-oauth-oidc.md](./14-oauth-oidc.md)) eliminates the XML-signature-scope class entirely.
 
 ## Detection and telemetry
 

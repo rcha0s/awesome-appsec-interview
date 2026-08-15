@@ -166,7 +166,7 @@ Server responds with `text/event-stream`. Each `event: message` carries a JSON-R
 
 ### Push notifications (`tasks/pushNotificationConfig/set`)
 
-The client registers a callback URL and optional authentication config. The server posts task updates to that URL when they occur. Security reason: it lets a long-lived client detach from the SSE connection. Security cost: the server is now an outbound HTTP client acting on caller-supplied URLs, a classic SSRF surface (see [16-ssrf-cloud-metadata.md](./16-ssrf-cloud-metadata.md) style guidance).
+The client registers a callback URL and optional authentication config. The server posts task updates to that URL when they occur. Security reason: it lets a long-lived client detach from the SSE connection. Security cost: the server is now an outbound HTTP client acting on caller-supplied URLs, a classic SSRF surface (see [04-ssrf.md](./04-ssrf.md) style guidance).
 
 ### Skills
 
@@ -234,7 +234,7 @@ Confirm when a response returns a `Task` for a task the caller never created, or
 }
 ```
 
-Confirm when server logs show a 200 outbound to the internal target. Blind OOB: use a Burp Collaborator style callback host and watch for the outbound DNS. Escalation is cloud IAM credential theft; see [16-ssrf-cloud-metadata.md](./16-ssrf-cloud-metadata.md) style patterns.
+Confirm when server logs show a 200 outbound to the internal target. Blind OOB: use a Burp Collaborator style callback host and watch for the outbound DNS. Escalation is cloud IAM credential theft; see [04-ssrf.md](./04-ssrf.md) style patterns.
 
 ### 6. Streaming-update poisoning (hypothetical class)
 

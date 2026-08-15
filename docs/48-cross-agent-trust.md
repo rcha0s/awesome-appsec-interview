@@ -284,7 +284,7 @@ Principal: layered: baseline `parts[].text` token distribution per peer, alert o
 **Q8. Where does A2A end and MCP begin in this attack class, and how does the mapping to LLM01, LLM06, API1, API5, and SSRF hold up?**
 
 Mid: A2A is between agents, MCP is agent to tools; call it prompt injection.
-Principal: same class, different surface. MCP tool descriptions are the AgentCard `skills` equivalent, MCP tool arguments are the `parts[].text` equivalent, MCP tool responses are the `artifact.parts[]` equivalent. Every defense listed here has an MCP analogue. The full mapping is LLM01 (peer text as instruction) plus LLM06 (excessive agency once injected) plus API1 (task BOLA) plus API5 (BFLA on state transitions) plus SSRF (callback URL). See [55-mcp-security.md](./55-mcp-security.md) and [30-web-llm-attacks.md](./30-web-llm-attacks.md).
+Principal: same class, different surface. MCP tool descriptions are the AgentCard `skills` equivalent, MCP tool arguments are the `parts[].text` equivalent, MCP tool responses are the `artifact.parts[]` equivalent. Every defense listed here has an MCP analogue. The full mapping is LLM01 (peer text as instruction) plus LLM06 (excessive agency once injected) plus API1 (task BOLA) plus API5 (BFLA on state transitions) plus SSRF (callback URL). See [55-mcp-protocol-deep.md](./55-mcp-protocol-deep.md) and [30-web-llm-attacks.md](./30-web-llm-attacks.md).
 
 ## War story
 
