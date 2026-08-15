@@ -118,9 +118,11 @@ nav:
     - Payment & PII Tokenization: 87-tokenization.md
     - Money-Movement & Idempotency: 92-money-movement-authz.md
 
-  - Infrastructure:
+  - Misconfiguration:
     - Security Misconfiguration & Headers: 19-security-misconfiguration-headers.md
     - Information Disclosure: 21-information-disclosure.md
+
+  - Infrastructure:
     - Kubernetes Security: 85-kubernetes.md
     - Container Escape: 86-container-escape.md
     - Zero Trust Architecture: 83-zero-trust.md
