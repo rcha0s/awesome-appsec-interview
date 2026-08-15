@@ -16,5 +16,8 @@ desktop.ini
 *.log
 .tmp/
 
+# MkDocs build output
+site/
+
 # Claude Code project-local settings (machine-specific)
 .claude/settings.local.json

@@ -1,0 +1,173 @@
+site_name: Awesome AppSec Interview
+site_description: Expert-level revision notes for web application security interviews — senior and staff security engineer level.
+site_url: https://rcha0s.github.io/awesome-appsec-interview
+repo_url: https://github.com/rcha0s/awesome-appsec-interview
+repo_name: rcha0s/awesome-appsec-interview
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+      title: On this page
+
+nav:
+  - Home: index.md
+
+  - Injection:
+    - injection/index.md
+    - SQL Injection: 01-sql-injection.md
+    - NoSQL Injection: 20-nosql-injection.md
+    - OS Command Injection: 05-command-injection.md
+    - Path Traversal & LFI: 11-path-traversal-lfi.md
+    - XXE Injection: 06-xxe.md
+    - SSTI: 07-ssti.md
+    - Insecure Deserialization: 08-insecure-deserialization.md
+    - File Upload: 10-file-upload.md
+
+  - Authentication & Identity:
+    - authn/index.md
+    - Authentication & Session: 12-authentication-session.md
+    - JWT Token Security: 13-jwt-token-security.md
+    - OAuth 2.0 & OIDC: 14-oauth-oidc.md
+    - OIDC Deep Dive: 77-oidc-deep.md
+    - SAML: 68-saml.md
+    - SSO: 67-sso.md
+    - WebAuthn & Passkeys: 70-webauthn-passkeys.md
+    - MFA & Step-Up Auth: 73-mfa-step-up.md
+    - Password Authentication: 75-password-authentication.md
+    - Session Management: 72-session-management.md
+    - Token Exchange: 78-token-exchange.md
+    - mTLS: 69-mtls.md
+    - SPIFFE & SPIRE: 81-spiffe-spire.md
+    - OpenID Federation: 82-openid-federation.md
+
+  - Access Control:
+    - Access Control & IDOR: 15-access-control-idor.md
+    - Business Logic & Race Conditions: 16-business-logic-race-conditions.md
+    - SSRF: 04-ssrf.md
+
+  - Client-Side:
+    - client-side/index.md
+    - Cross-Site Scripting (XSS): 02-cross-site-scripting.md
+    - CSRF: 03-csrf.md
+    - CORS Misconfiguration: 18-cors.md
+    - Clickjacking: 22-clickjacking.md
+    - WebSockets: 23-websockets.md
+    - Prototype Pollution: 24-prototype-pollution.md
+
+  - HTTP & Protocol:
+    - http/index.md
+    - HTTP Request Smuggling: 09-http-request-smuggling.md
+    - HTTP Host Header Attacks: 25-http-host-header.md
+    - Web Cache Poisoning: 26-web-cache-poisoning.md
+    - Web Cache Deception: 27-web-cache-deception.md
+    - GraphQL: 28-graphql.md
+    - API Security: 29-api-security.md
+    - Webhooks: 95-webhooks.md
+
+  - Cryptography & Secrets:
+    - Cryptographic Failures: 17-cryptographic-failures.md
+    - Payment & PII Tokenization: 87-tokenization.md
+    - Money-Movement & Idempotency: 92-money-movement-authz.md
+
+  - Infrastructure:
+    - Security Misconfiguration & Headers: 19-security-misconfiguration-headers.md
+    - Information Disclosure: 21-information-disclosure.md
+    - Kubernetes Security: 85-kubernetes.md
+    - Container Escape: 86-container-escape.md
+    - Zero Trust Architecture: 83-zero-trust.md
+
+  - AI & LLM Security:
+    - ai/index.md
+    - Hubs:
+      - Web LLM Attacks: 30-web-llm-attacks.md
+      - MCP Protocol Security: 31-mcp-protocol-security.md
+      - Agentic AI Threats: 32-agentic-ai-threats.md
+    - OWASP LLM Top 10:
+      - Direct Prompt Injection (LLM01a): 33-direct-prompt-injection.md
+      - Indirect Prompt Injection (LLM01b): 34-indirect-prompt-injection.md
+      - Sensitive Info Disclosure (LLM02): 35-sensitive-info-disclosure.md
+      - LLM Supply Chain (LLM03): 36-llm-supply-chain.md
+      - Data & Model Poisoning (LLM04): 37-data-and-model-poisoning.md
+      - Improper Output Handling (LLM05): 38-improper-output-handling.md
+      - Excessive Agency (LLM06): 39-excessive-agency.md
+      - System Prompt Leakage (LLM07): 40-system-prompt-leakage.md
+      - Vector & Embedding Weaknesses (LLM08): 41-vector-embedding-weaknesses.md
+      - Misinformation & Hallucination (LLM09): 42-misinformation-and-hallucination.md
+      - Unbounded Consumption (LLM10): 43-unbounded-consumption.md
+    - Agent-Specific Attacks:
+      - Memory Poisoning: 44-memory-poisoning.md
+      - Plan & Goal Hijacking: 45-plan-goal-hijacking.md
+      - Cascading Hallucination: 46-cascading-hallucination.md
+      - Human-in-the-Loop Bypass: 47-hitl-bypass.md
+      - Cross-Agent Trust & A2A Injection: 48-cross-agent-trust.md
+      - Tool-Schema Confusion: 49-tool-schema-confusion.md
+      - Credential Passthrough & Token Scoping: 50-credential-passthrough.md
+      - Sandbox Escape via Tool Composition: 51-sandbox-escape-via-composition.md
+      - MCP Cross-Server Shadowing: 52-mcp-cross-server-shadowing.md
+      - Rug Pull & Tool-Definition Drift: 53-rug-pull-tool-drift.md
+      - Orchestrator Prompt Injection: 54-orchestrator-prompt-injection.md
+    - Protocols & Architecture:
+      - MCP Protocol Deep Dive: 55-mcp-protocol-deep.md
+      - A2A Protocol: 56-a2a-protocol.md
+      - Function-Calling Protocols: 57-function-calling-protocols.md
+      - RAG Architecture & Attacks: 58-rag-architecture-attacks.md
+      - Vector Stores: 59-vector-stores.md
+      - Model Serving & Inference API: 60-model-serving-attacks.md
+      - Guardrail Systems: 61-guardrail-systems.md
+      - Model File Formats & Loaders: 62-model-file-formats.md
+    - Defenses:
+      - AI & Agent Defenses: 65-ai-agent-defenses.md
+      - Spotlighting: 66-spotlighting.md
+
+  - ADRs:
+    - ADR-0001 Doc Format: adr/0001-doc-format-prose-first.md
+    - ADR-0002 Section Order: adr/0002-how-it-works-before-quick-reference.md
