@@ -176,6 +176,3 @@ nav:
       - AI & Agent Defenses: 65-ai-agent-defenses.md
       - Spotlighting: 66-spotlighting.md
 
-  - ADRs:
-    - ADR-0001 Doc Format: adr/0001-doc-format-prose-first.md
-    - ADR-0002 Section Order: adr/0002-how-it-works-before-quick-reference.md
