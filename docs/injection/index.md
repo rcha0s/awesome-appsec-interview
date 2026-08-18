@@ -13,6 +13,7 @@ Injection flaws share a common root: untrusted data reaches an interpreter that 
 | [XXE Injection](../06-xxe.md) | XML parsers never resolve external entities |
 | [SSTI](../07-ssti.md) | Template rendering context is not user-supplied |
 | [Insecure Deserialization](../08-insecure-deserialization.md) | Deserialized class is never user-chosen |
+| [SSRF](../04-ssrf.md) | Server-initiated requests never use attacker-controlled URLs |
 | [File Upload](../10-file-upload.md) | Uploaded content is never executed in server context |
 
 ## Common escalation chain
