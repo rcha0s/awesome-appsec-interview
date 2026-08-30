@@ -11,7 +11,7 @@ Adds ONE new topic doc to the awesome-appsec-interview repo, matching the locked
 
 - One markdown file at `docs/NN-<slug>.md` where `NN` is the next available two-digit number in the docs directory.
 - The doc's opener is prose-first: `#` title on line 1, a blockquote mental-model paragraph on line 3, then `## Quick reference` (wire-level example + invariants table only).
-- Full body: `## How it works` with `###` sub-headings and mermaid diagrams, `## Attack techniques` with `### N. <name>` per technique and prose-woven rubric (mechanism, payload, black-box + blind/OOB confirmation, escalation) with NO bolded sub-heads inside, `## Defense` split into `### Real fix` and `### Defense in depth`, `## Detection and telemetry`, `## Interviewer probes` (5-8 Q&A pairs with Mid vs Principal answers), optional `## War story`, and `## Sources` with HTML-anchored numbered entries.
+- Full body: `## How it works` with `###` sub-headings and, where the topic's own judgment calls for it (see DIAGRAMS below), one mermaid diagram, `## Attack techniques` with `### N. <name>` per technique and prose-woven rubric (mechanism, payload, black-box + blind/OOB confirmation, escalation) with NO bolded sub-heads inside, `## Defense` split into `### Real fix` and `### Defense in depth`, `## Detection and telemetry`, `## Interviewer probes` (5-8 Q&A pairs with Mid vs Principal answers), optional `## War story`, and `## Sources` with HTML-anchored numbered entries.
 - Attack and Defense sections carry clickable inline references as `<sup>[[N]](#refN)</sup>` resolving to Sources entries that open with `<a id="refN"></a>`.
 - No inline author names in prose. No `## Interview-grade nuances` section. No standalone `## Spec / RFC anchors` block.
 
@@ -19,7 +19,7 @@ Adds ONE new topic doc to the awesome-appsec-interview repo, matching the locked
 
 - **topic**: short human title, e.g., "SAML XSW", "WebAuthn passkeys", "GraphQL batching abuse". Required.
 - **scope brief**: 3-8 sentences on what to cover, including named research, RFCs, OWASP mapping, CVEs, cross-links to existing docs. If the user did not provide one, offer to draft one from the topic name and pause for their approval before proceeding. This is the highest-leverage input.
-- **shape** (optional): one of `attack-class | protocol | defense-standalone | defense-reference | infrastructure`. If omitted, infer from the topic. This shapes the emphasis (protocol docs need a handshake diagram; attack docs need an attack-chain flowchart; defense docs need before/after transformations).
+- **shape** (optional): one of `attack-class | protocol | defense-standalone | defense-reference | infrastructure`. If omitted, infer from the topic. This shapes the emphasis (protocol docs typically get a handshake diagram; attack docs typically get an attack-chain flowchart; defense docs need before/after transformations) but the draft agent still decides per-topic whether a diagram earns its place, see DIAGRAMS in the workflow template.
 
 ## Preconditions
 
@@ -56,7 +56,7 @@ After the workflow returns, verify:
 - File exists at `docs/NN-<slug>.md`.
 - Line 1 is `# <title>` and line 3 starts with `> ` (blockquote mental model).
 - `## Quick reference` section exists and contains a code block plus a markdown table with headers `Invariant | Where enforced | How violated | Source`.
-- `## How it works` section exists with at least one mermaid block.
+- `## How it works` section exists. If it has no mermaid block, confirm the draft's stated diagram call ("diagram: omitted, ...") is a defensible single-point-payload judgment and not a silent skip; if the topic is protocol- or attack-chain-shaped and no diagram call was stated, push back on the merge output. If it has a mermaid block, confirm it was render-verified per step 4 (no parse errors) and that any attacker/untrusted-node highlighting uses `classDef atk fill:#fee,stroke:#900` rather than an invented color.
 - `## Attack techniques` section exists with `### N. <name>` sub-headings and no `**Mechanism.**` / `**Payload.**` / `**Black-box confirmation.**` / `**Escalation.**` bolded sub-heads inside.
 - `## Defense` section has both `### Real fix` and `### Defense in depth` sub-headings.
 - `## Interviewer probes` exists with 5-8 Q&A pairs; each answer has a "Mid:" and "Principal:" component.
@@ -139,7 +139,11 @@ Doc-specific:
   - Length: 300 to 700 lines. No filler.
 
 DIAGRAMS:
-  - Mermaid only. Protocol docs: full-handshake sequence diagram with attack surface annotated. Attack docs: attack-chain flowchart end-to-end.
+  - Decide per topic, do not force one to satisfy a checklist. Include exactly one \`\`\`mermaid diagram in ## How it works, placed right after the paragraph whose mechanism it depicts, when the topic has a multi-party wire protocol, a multi-step attack chain, a timing/race mechanism, or an architecture worth tracing. Skip the diagram when the mechanism is a single-point payload or parsing bug with no multi-step flow to show (e.g. a pure injection-syntax variant with no protocol/timing dimension) - a diagram there is decorative, not clarifying. State the call explicitly in your response (one line: "diagram: included, protocol handshake" or "diagram: omitted, single-point payload bug").
+  - When you do include one: protocol docs get a full-handshake sequence diagram with the attack surface annotated (Note lines or highlighted nodes); attack docs get an attack-chain flowchart end-to-end. Ground every label in claims already in the draft, do not introduce new facts via the diagram.
+  - MERMAID GOTCHA (verified against this site's rendering): never put a semicolon (;) inside a node label, edge label, sequence message text, or Note text. Mermaid's grammar uses ; as a statement separator and will break mid-label parsing. Use a comma instead.
+  - To flag attacker-controlled or untrusted nodes in a flowchart, reuse the site's established convention rather than inventing a new highlight: \`classDef atk fill:#fee,stroke:#900\` then \`class <nodeIds> atk\` (see docs/32-agentic-ai-threats.md or docs/55-mcp-protocol-deep.md for the pattern in use).
+  - Do not set explicit background/text/theme colors in the diagram source. The site's docs/javascripts/mermaid-theme.mjs owns all diagram theming (teal/cyan palette, WCAG-AA contrast in both light and dark) and applies automatically to every \`\`\`mermaid fence; only the classDef atk override above is expected to appear in diagram source.
 
 CITATION HONESTY:
   - Never invent papers, CVEs, advisories. RFC clauses, arXiv IDs, CVE numbers, MITRE ATLAS technique IDs (must use AML.T#### prefix) must be accurate.
@@ -244,7 +248,9 @@ const final = await agent(
 
 TASK: Produce the FINAL markdown for ${OUTFILE}. Apply every valid finding. Re-verify opener contract (title, blockquote mental model, ## Quick reference with wire + invariants only, then ## How it works). Re-verify Defense split into Real fix + Defense in depth. Re-verify inline refs are all <sup>[[N]](#refN)</sup>.
 
-Call the Write tool to write the final markdown to ${OUTFILE}. Return the full markdown as your response text as well.
+If the final markdown contains a \`\`\`mermaid block, verify it renders before writing: extract just the diagram source to a temp .mmd file, write a temp puppeteer config \`{"args":["--no-sandbox","--disable-setuid-sandbox"]}\`, then run \`npx --yes -p @mermaid-js/mermaid-cli mmdc -i <file>.mmd -o <file>.png -p <puppeteer-config>.json -b white\` (no theme config needed for a syntax check, the real theme is applied by the site automatically). It must render with zero parse errors. The most common cause of failure is a semicolon inside a label; if it errors, fix the syntax and re-render until clean before writing the doc. If the topic's diagram call was "omitted", skip this check.
+
+Call the Write tool to write the final markdown to ${OUTFILE}. Return the full markdown as your response text as well, and state whether a diagram was included or omitted and why, and whether it render-verified clean.
 
 DRAFT:
 ---
