@@ -30,6 +30,16 @@ Where the bytes live matters as much as their shape: cookies and hidden fields (
 
 The lifecycle hooks are the ignition. In Java, a `Serializable` class may declare a private `readObject(ObjectInputStream)`; `ObjectInputStream.readObject()` calls it as an implicit constructor during deserialization. In PHP, `unserialize()` triggers `__wakeup()` on rebuild and `__destruct()` when the object is later garbage-collected. In Python, `pickle` executes whatever the object's `__reduce__` returns as a `(callable, args)` pair. .NET runs `[OnDeserializing]`/`[OnDeserialized]` callbacks and `ISerializable` constructors. Ruby `Marshal.load` rebuilds arbitrary objects and can trigger methods during coercion.
 
+```mermaid
+flowchart TD
+  A[Attacker crafts serialized payload, gadget chain] --> B[Endpoint deserializes untrusted bytes]
+  B --> C[Deserializer instantiates the class named in the stream]
+  C --> D[Lifecycle hook fires automatically: readObject, __wakeup, or __reduce__]
+  D --> E[Hook chains through existing classpath methods, the gadget chain]
+  E --> F[Chain reaches a dangerous sink: reflection, exec, or file write]
+  F --> G[Remote code execution]
+```
+
 ```java
 // This method, declared exactly like this, runs automatically on deserialize.
 private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {

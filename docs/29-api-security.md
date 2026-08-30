@@ -27,6 +27,17 @@ Content-Type: application/json
 
 Authentication is typically a bearer token (JWT or opaque), an API key, or a session cookie. Authorization is a separate decision the application must make on each request: does this authenticated principal have the right to this object (object-level), this function (function-level), and these specific properties (property-level). REST gives you no automatic enforcement of any of those; the endpoint code must do it.
 
+```mermaid
+flowchart TD
+  C[Client, bearer token] --> GW[API gateway: authenticates token, rate limits]
+  GW --> BE[Backend endpoint GET /api/orders/:id]
+  BE --> Check{Object-level authorization check?}
+  Check -->|present| Own[Returns caller's own order 1004]
+  Check -->|missing, BOLA| Other[Also returns order 1005, another user's]
+  Own --> DB[(Data store)]
+  Other --> DB
+```
+
 Machine-readable contracts (OpenAPI/Swagger JSON or YAML) describe endpoints, methods, parameters, and schemas. They are recon gold when exposed and a security tool when used for request/response schema validation. Because APIs sprawl across versions (`/v1`, `/v2`), environments (staging, debug), and internal-only services, inventory and version hygiene are first-class security concerns.
 
 ## Attack techniques

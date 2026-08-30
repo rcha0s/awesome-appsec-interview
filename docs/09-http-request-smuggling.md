@@ -33,6 +33,25 @@ q=smuggling
 
 RFC 9112 section 6.1 (formerly RFC 7230) is explicit: if both headers are present, `Transfer-Encoding` overrides `Content-Length`, and because the combination often signals a smuggling or response-splitting attempt, a server "ought to" treat the message as an error and close the connection. The vulnerability class exists precisely because real deployments do not all follow that: some ignore `Transfer-Encoding` entirely, some ignore it when it is lightly obfuscated, some prefer `Content-Length`, and few reject the ambiguous combination outright. Two things being true at once, connection reuse plus divergent length resolution, is the entire attack surface.
 
+```mermaid
+sequenceDiagram
+  participant A as Attacker
+  participant F as Front-end (Content-Length)
+  participant B as Back-end (Transfer-Encoding)
+  participant V as Victim
+  A->>F: POST / with Content-Length 13 and Transfer-Encoding chunked, body ends 0 CRLF CRLF SMUGGLED
+  F->>F: trusts Content-Length, treats whole body as one request
+  F->>B: forwards entire request unchanged on reused connection
+  B->>B: trusts Transfer-Encoding, chunk 0 ends the request here
+  Note over B: trailing bytes SMUGGLED left buffered as start of next request
+  V->>F: sends normal request on same keep-alive connection
+  F->>B: forwards victim's request on the same back-end connection
+  Note over B: victim's bytes appended after buffered SMUGGLED prefix
+  B->>B: parses SMUGGLED plus victim's bytes as one attacker-controlled request
+  B-->>F: response generated for attacker's smuggled request
+  F-->>V: attacker-controlled response delivered as if it were the victim's
+```
+
 Note the practical wrinkle: chunked encoding is legal in requests but browsers never send it, and Burp Suite auto-unpacks it in the editor, so many testers have never seen a raw chunked request body. Manual smuggling requires disabling automatic `Content-Length` updates in the tool so the crafted, deliberately wrong lengths survive to the wire.
 
 ## Attack techniques

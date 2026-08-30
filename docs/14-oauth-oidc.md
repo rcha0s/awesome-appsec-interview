@@ -41,6 +41,33 @@ Two channels matter for every attack:
 
 The `code` is a short-lived, single-use, back-channel-redeemable artifact. Even if it leaks in the front channel, redemption requires the `client_secret` (confidential clients) or the PKCE `code_verifier` (public clients), so a bare stolen code is useless against a correctly configured AS. That is the whole security argument for preferring code over implicit.
 
+```mermaid
+sequenceDiagram
+  participant U as User agent
+  participant C as Client app
+  participant AS as Authorization server
+  participant Atk as Attacker
+
+  C->>U: Redirect to /authorize, client_id + redirect_uri + scope + state + code_challenge
+  U->>AS: GET /authorize
+  AS->>U: Authenticate + consent
+  AS-->>U: 302 to redirect_uri, code + state
+  U->>C: Deliver code + state
+  C->>AS: POST /token, code + client_secret or code_verifier (back channel)
+  AS-->>C: access_token + id_token
+  C->>C: Verify id_token signature, aud, iss, nonce
+
+  Note over Atk,AS: redirect_uri validated loosely, substring or subdomain match
+  Atk->>U: Lure victim into OAuth flow, attacker redirect_uri accepted
+  U->>AS: GET /authorize, redirect_uri=attacker-controlled
+  AS-->>U: 302 to attacker redirect_uri, code + state
+  U->>Atk: Code delivered to attacker page
+  Atk->>C: Replay stolen code to real redirect_uri
+  C->>AS: POST /token, stolen code (back channel)
+  AS-->>C: access_token for victim
+  C-->>Atk: Attacker now logged in as victim
+```
+
 ### Implicit grant (legacy, deprecated)
 
 `response_type=token` returns the access token directly in the URL fragment (`#access_token=...`). No back-channel exchange, so the token is exposed in browser history, `Referer`, and any JavaScript on the callback page. The OAuth 2.0 Security BCP (RFC 9700) deprecates it; OAuth 2.1 removes it. If you see `response_type=token` in the wild, that is a finding by itself.

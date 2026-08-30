@@ -36,6 +36,19 @@ A parameter entity, referenceable only within the DTD:
 
 The parser's job at parse time is to expand every referenced entity. For an external entity it opens the URI (via `file://`, `http://`, `ftp://`, or whatever protocol handlers the platform library registers) and inlines the bytes it reads back. The application never asked for this; it just called a standard parse API on a factory whose defaults allow it.
 
+```mermaid
+sequenceDiagram
+  participant A as Attacker
+  participant T as Target server, XML parser
+  participant D as Attacker's DTD host
+  A->>T: Submit XML with DOCTYPE referencing external DTD URL
+  T->>D: Fetch malicious.dtd (out-of-band request)
+  D-->>T: DTD defines parameter entities file, eval, exfiltrate
+  T->>T: Expand file entity, read local file e.g. etc/passwd
+  T->>D: GET /?x=file contents (exfiltration request)
+  D-->>D: Log request, file contents captured in query string
+```
+
 Two structural rules from the XML specification drive the advanced attacks:
 
 - A parameter entity may be used inside the definition of another parameter entity only in an external DTD subset, not in an internal one. Nested parameter-entity tricks therefore need an external DTD (yours, over the network, or a local file already on disk).

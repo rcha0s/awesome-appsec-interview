@@ -47,6 +47,28 @@ Wire delivery is usually an `Authorization: Bearer <jwt>` header or a cookie. A 
 { "keys": [ { "kty": "RSA", "kid": "9136ddb3", "e": "AQAB", "n": "o-yy1wpYmffgXBxhAUJz..." } ] }
 ```
 
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant S as Server, issuer and verifier
+  participant Atk as Attacker
+
+  C->>S: Authenticate (login)
+  S->>S: Sign header.payload.signature with RS256 private key
+  S-->>C: JWT (header.payload.signature)
+  C->>S: API request, Authorization Bearer JWT
+  S->>S: Read alg from header, verify signature with matching key
+  S-->>C: 200 OK
+
+  Note over Atk,S: RS256 to HS256 algorithm confusion
+  Atk->>S: GET /.well-known/jwks.json
+  S-->>Atk: RSA public key
+  Atk->>Atk: Forge token, header alg=HS256, sign HMAC-SHA256(data, RSA public key bytes)
+  Atk->>S: API request, Authorization Bearer forged JWT
+  S->>S: Reads alg=HS256, verifies using RSA public key as HMAC secret, signature matches
+  S-->>Atk: 200 OK, forged token accepted
+```
+
 ## Attack techniques
 
 1. Unverified signature (decode instead of verify).

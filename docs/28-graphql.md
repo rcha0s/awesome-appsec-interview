@@ -59,6 +59,24 @@ Key syntax that becomes attack surface:
 
 Introspection is a built-in meta-API: querying `__schema` and `__type` returns the entire schema, including every type, field, argument, and description. Every endpoint also answers `__typename`. Resolvers are the per-field functions that actually fetch data; authorization must live here because the endpoint and method are the same for everything.
 
+```mermaid
+flowchart TD
+  C[Client] -->|"POST /graphql, query"| EP["/graphql endpoint"]
+  EP --> P[Parse operation type and name]
+  P --> R1[Resolver, product by id]
+  P --> R2[Resolver, user by id]
+  R1 --> DB[(Underlying data sources)]
+  R2 --> DB
+
+  Atk[Attacker] -->|"POST /graphql, query __schema"| EP
+  EP --> INTRO[__schema meta-resolver]
+  INTRO --> SCHEMA[Full schema: types, fields, args, hidden mutations]
+  SCHEMA -->|reveals promoteToAdmin, deleteUser| Atk
+
+  classDef atk fill:#fee,stroke:#900
+  class Atk,INTRO,SCHEMA atk
+```
+
 ## Attack techniques
 
 1. Finding the endpoint and fingerprinting the engine.

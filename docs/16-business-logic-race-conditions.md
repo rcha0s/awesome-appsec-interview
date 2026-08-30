@@ -14,6 +14,29 @@ Three root causes recur (PortSwigger's taxonomy):
 
 Race conditions are the concurrency form. Most sites handle concurrent requests with multiple threads sharing one datastore, and application code is rarely written with concurrency in mind. A race window is the interval between a check and the dependent action (time-of-check to time-of-use, TOCTOU). If two threads both pass the check before either commits the action, the invariant the check was protecting is broken. Kettle's key extension is that the window is not only between two of your requests: a single request internally reads, writes, hands data between classes and threads, and passes through sub-states (a logged-in-but-MFA-not-yet-enforced state, a user-created-but-API-key-null state) that a second concurrent request can catch mid-flight.
 
+```mermaid
+sequenceDiagram
+  participant A as Request A, redeem TOP10
+  participant B as Request B, redeem TOP10
+  participant DB as Backend / database
+  par Check from A
+    A->>DB: Is code TOP10 already used?
+    DB-->>A: Not yet used
+  and Check from B
+    B->>DB: Is code TOP10 already used?
+    DB-->>B: Not yet used
+  end
+  Note over A,B: Both checks pass before either write commits, check and act are not atomic
+  par Commit from A
+    A->>DB: Mark TOP10 used, apply discount
+  and Commit from B
+    B->>DB: Mark TOP10 used, apply discount
+  end
+  DB-->>A: Discount applied
+  DB-->>B: Discount applied
+  Note over DB: Coupon redeemed twice, double redemption
+```
+
 These vulnerabilities are highly domain-specific, which is exactly why they resist automation and why they are prime territory for manual testers and bug bounty hunters. The interview skill is hypothesis generation: for each rule the application enforces, name the state where the rule is assumed but not re-verified.
 
 ## Attack techniques

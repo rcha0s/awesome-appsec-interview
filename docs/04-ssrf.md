@@ -24,6 +24,18 @@ stockApi=http://192.168.0.68/admin
 
 WHY the `/admin` case works even though you cannot reach `/admin` directly: the access-control check often lives in a front proxy, or the app grants passwordless admin to "local" callers for disaster recovery, or admin listens on a separate port only reachable from the box. When the request originates from the server itself, those trust assumptions hand you the panel.
 
+```mermaid
+sequenceDiagram
+  participant Attacker
+  participant App as Vulnerable app server
+  participant Internal as Internal admin, 192.168.0.68/admin
+  Attacker->>App: POST /product/stock, stockApi=http://192.168.0.68/admin
+  App->>Internal: Server-side fetch of the attacker-supplied URL
+  Note over Internal: Trusts requests that originate from the server as local, no auth required
+  Internal-->>App: Admin panel response
+  App-->>Attacker: Reflects the fetched response back
+```
+
 The dangerous SSRF targets, in order of usual payoff:
 
 ```

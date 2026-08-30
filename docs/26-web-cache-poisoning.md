@@ -19,6 +19,23 @@ X-Forwarded-Host: example.com            <- unkeyed
 
 Two requests that differ only in unkeyed components are treated as equivalent, so a response generated for the first is served to the second. That is already an accidental-breakage engine (serve the Polish page to English users because `Cookie: language` is unkeyed). It becomes an attack when the unkeyed input is attacker-chosen and reaches a dangerous sink.
 
+```mermaid
+sequenceDiagram
+  participant A as Attacker
+  participant C as Cache
+  participant O as Origin
+  participant V as Victim
+  A->>C: GET /page with unkeyed header, e.g. X-Forwarded-Host: attacker.com
+  C->>C: computes cache key from method, path, Host only, header stays unkeyed
+  C->>O: cache miss, forwards full request including unkeyed header
+  O->>O: reflects unkeyed header value into response, e.g. Open Graph image URL
+  O-->>C: response body contains attacker's reflected payload
+  C->>C: stores response under the ordinary key for /page
+  C-->>A: returns poisoned response
+  V->>C: GET /page, ordinary request, no attacker header
+  C-->>V: cache hit, serves the stored poisoned response
+```
+
 Response-header mechanics that govern all of this:
 
 - `Cache-Control` (`public`, `private`, `no-store`, `no-cache`, `max-age`) is the origin's caching directive. Crucially it is advisory to the CDN: Kettle poisoned Red Hat despite `Cache-Control: public, no-cache`, because the fronting cache (Akamai) cached anyway. Always test rather than assume a header prevents caching.

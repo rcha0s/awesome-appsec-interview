@@ -16,6 +16,24 @@ Cache rules that matter for WCD are almost always path-string rules:
 
 The core requirement is a parsing discrepancy: the cache and origin must disagree on where the "real" resource ends and the decorative static-looking suffix begins. There are three families of discrepancy: path mapping, delimiters (including delimiter decoding), and path normalization.
 
+```mermaid
+sequenceDiagram
+  participant A as Attacker
+  participant V as Victim
+  participant C as Cache
+  participant O as Origin
+  A->>V: lures victim to /account/profile/wcd.css
+  V->>C: GET /account/profile/wcd.css, authenticated with session cookie
+  C->>C: no stored entry, cache miss
+  C->>O: forwards full request to origin
+  O->>O: routes to /account/profile, ignores trailing wcd.css segment
+  O-->>C: 200 response containing victim's private profile data
+  C->>C: sees .css extension, matches static-file rule, stores the response
+  C-->>V: returns victim's private data
+  A->>C: GET /account/profile/wcd.css, no cookies
+  C-->>A: cache hit, serves victim's cached private data
+```
+
 Detecting cached responses during testing:
 
 - `X-Cache: hit` (served from cache), `miss` (fetched from origin, usually then stored, resend to confirm it flips to `hit`), `dynamic` (origin generated it, not cacheable), `refresh` (revalidated).

