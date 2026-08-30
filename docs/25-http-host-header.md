@@ -21,6 +21,22 @@ The security problem is that off-the-shelf apps often do not know their own cano
 
 Because `$_SERVER['HTTP_HOST']` is just the attacker's `Host` header, any generated link, redirect, or cache entry can be steered off-site. The header is also frequently reflected into responses unescaped, passed into SQL or template contexts, or used to decide whether a request counts as "internal."
 
+```mermaid
+sequenceDiagram
+  participant A as Attacker
+  participant App as App (password reset)
+  participant V as Victim
+  participant AS as Attacker's server
+  A->>App: POST /forgot-password, Host: evil-user.net, username=victim@site.com
+  App->>App: generates high-entropy reset token, stores it against victim's account
+  App->>App: builds reset link from Host header, https://evil-user.net/reset?token=...
+  App-->>V: sends genuine reset email to victim, link points at evil-user.net
+  V->>AS: victim clicks link, browser requests evil-user.net with token in path
+  AS->>AS: captures token from access log or Referer
+  A->>App: submits captured token to real site, sets new password
+  App-->>A: password reset accepted, account takeover
+```
+
 An added layer of trust exists because intermediaries rewrite the header. A front-end may overwrite the client `Host` with an internal name and preserve the original in `X-Forwarded-Host`, so frameworks are built to prefer `X-Forwarded-Host` when present. That override header is equally attacker-controlled and is frequently enabled by default without the operator realizing it. Common variants that many stacks honor:
 
 ```

@@ -17,6 +17,19 @@ A typical tool-using integration:
 
 Two properties create the attack surface. First, **the model chooses which tool to call and with what arguments**, driven by text it was given, and some of that text is attacker-controlled (the user prompt, or data fetched from a web page, email, or document). Second, **the model's output is frequently trusted downstream** (rendered as HTML, used to build a SQL query, passed to another tool). The trust boundary that should sit between "data" and "instructions" does not exist inside the context window.
 
+```mermaid
+flowchart LR
+  U[User's browser] --> BE[Web app backend]
+  BE --> LLM[LLM: system prompt + user prompt + tool schemas]
+  EXT[[Untrusted content: web page, email, or document]] -->|indirect injection| LLM
+  LLM -->|model output| BE
+  BE -->|rendered as HTML or triggers tool action, unsanitized| OUT[Page / downstream action]
+  OUT --> U
+
+  classDef atk fill:#fee,stroke:#900
+  class EXT,OUT atk
+```
+
 Key terms:
 
 - **Prompt injection**: crafted input that overrides the model's intended instructions. *Direct* = injected via the user's own prompt. *Indirect* = injected via an external source the model later reads (a web page it summarizes, an email, a review, a filename, a code comment).

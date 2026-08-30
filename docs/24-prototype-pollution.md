@@ -27,6 +27,20 @@ target.__proto__.polluted = 'yes';   // writes to Object.prototype
 targetObject.__proto__.evilProperty = 'payload';
 ```
 
+```mermaid
+flowchart TD
+  A[Attacker sends JSON body with a __proto__ key, e.g. isAdmin true] --> B[Endpoint deep merges input into a target object]
+  B --> C[Merge writes the attacker's key onto shared Object.prototype, not the local object]
+  C --> D[Every object in the process now inherits isAdmin true]
+  D --> E[Unrelated later code reads isAdmin on its own object]
+  E --> F[Own object never set isAdmin, lookup falls through to the polluted prototype]
+  F --> G[Read resolves to the attacker's value]
+  G --> H[Downstream authorization or config check is bypassed]
+
+  classDef atk fill:#fee,stroke:#900
+  class A,C,D,F,G atk
+```
+
 **JSON is special.** An object literal `{ __proto__: {...} }` uses the `__proto__` *setter* and does not create an own `__proto__` key. But `JSON.parse` treats every key as a plain string, so it produces a real own `__proto__` property, which is exactly what a subsequent unsafe merge needs:
 
 ```javascript

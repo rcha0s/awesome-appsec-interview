@@ -30,6 +30,30 @@ The current MCP authorization spec builds on **OAuth 2.1 draft-ietf-oauth-v2-1-1
 
 Discovery is codified: MCP servers MUST implement **RFC 9728 Protected Resource Metadata**, and MCP clients MUST use it for AS discovery. Clients MUST implement **RFC 8707 Resource Indicators**, sending the `resource` parameter in both authorization and token requests, set to the canonical URI of the MCP server, regardless of AS support. Servers MUST validate that access tokens were issued specifically for them (audience binding) and MUST NOT accept or transit tokens issued for other services. Authorization is optional for MCP overall (STDIO servers SHOULD retrieve credentials from the environment instead), but HTTP-based transports SHOULD conform.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Client as MCP client (host)
+  participant Server as Remote MCP server (resource server)
+  participant AS as Authorization server
+  Client->>Server: Request, no token
+  Server-->>Client: 401 WWW-Authenticate resource_metadata=<PRM URL>
+  Client->>Server: GET /.well-known/oauth-protected-resource (RFC 9728)
+  Server-->>Client: Protected Resource Metadata {authorization_servers}
+  Note over Client,AS: AS URL must be HTTPS, block RFC1918 and link-local (incl. 169.254.169.254)
+  Client->>AS: GET AS metadata (issuer, endpoints)
+  AS-->>Client: authorization_endpoint, token_endpoint
+  Client->>AS: Authorize + PKCE code_challenge + resource=<server URI> + state
+  AS-->>Client: redirect with code + state
+  Client->>AS: Token request + code_verifier + resource=<server URI>
+  AS-->>Client: access_token (aud=server URI), rotated refresh_token
+  Client->>Server: Request, Authorization Bearer access_token
+  Server->>Server: reject unless aud == own canonical URI
+  Server-->>Client: 200, scoped to validated audience
+```
+
+Two failure points map directly onto attacks below: the client fetching `authorization_servers` or endpoint URLs without validating scheme and address is the SSRF-via-discovery surface (technique 5), and a server that skips the `aud` check on the final bearer token is the token-passthrough surface (technique 4).
+
 ### The expanded Security Best Practices catalog
 
 The Security Best Practices document has substantially expanded since 2025-06-18. Beyond the original **confused deputy** and **token passthrough** patterns, the current document adds six attack classes: **SSRF against MCP clients during OAuth discovery**, **session hijacking** (both prompt-injection-via-shared-queue and simple session-ID impersonation variants), **local MCP server compromise** (malicious startup commands, malicious binaries, DNS rebinding against local servers), **OAuth authorization URL validation** (dangerous URL schemes leading to XSS or command injection), **stdio transport security in proxy scenarios** (XSS-to-RCE escalation via a local proxy that spawns child processes), and **scope minimization** (progressive least-privilege scope elevation via WWW-Authenticate challenges). Many of these overlap with existing tool-poisoning and shadowing attacks; the deep dive in [55](55-mcp-protocol-deep.md) covers each one at length, with dedicated docs for [52](52-mcp-cross-server-shadowing.md) (shadowing) and [53](53-rug-pull-tool-drift.md) (rug pulls).

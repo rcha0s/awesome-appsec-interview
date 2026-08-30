@@ -12,6 +12,23 @@ A session is a server-side record of an authenticated principal, referenced by a
 
 Two session-management models matter for fixation. A **strict** implementation only accepts session IDs it generated; a **permissive** one accepts any ID the client supplies and creates a session around it. Permissive mode is the substrate for session fixation, and PHP historically defaults to permissive (`session.use_strict_mode` off), which is why explicit configuration matters.
 
+```mermaid
+sequenceDiagram
+  participant Atk as Attacker
+  participant Vic as Victim browser
+  participant Srv as Server, session store
+
+  Note over Atk,Srv: Session fixation, permissive session model
+  Atk->>Srv: GET /?sessionid=FIXED123
+  Srv-->>Atk: Set-Cookie, session=FIXED123 (unauthenticated)
+  Atk->>Vic: Delivers link containing sessionid=FIXED123
+  Vic->>Srv: POST /login, Cookie session=FIXED123, credentials
+  Srv->>Srv: Validate credentials, authenticate principal
+  Srv-->>Vic: 200 OK, session=FIXED123 (authenticated, ID not regenerated)
+  Atk->>Srv: GET /account, Cookie session=FIXED123
+  Srv-->>Atk: 200 OK, victim's authenticated session
+```
+
 The identity flows are where authentication decisions get made, and each is independently attackable. A senior mental model treats login, registration, password reset, password change, and MFA as five separate state machines that must all fail closed, all rate-limit, all return identical responses for valid and invalid principals, and all regenerate or invalidate sessions at the right transitions. A flaw in any one (a reset that skips MFA, a registration that leaks account existence, an OTP step reachable without the password step) undermines the others.
 
 ## Attack techniques

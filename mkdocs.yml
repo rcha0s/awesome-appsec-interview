@@ -37,8 +37,13 @@ theme:
     - search.share
     - content.code.copy
     - content.action.edit
-  extra_javascript:
-    - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - path: javascripts/mermaid-theme.mjs
+    type: module
 
 plugins:
   - search:
@@ -52,7 +57,7 @@ markdown_extensions:
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
-          class: mermaid
+          class: mermaid-source
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true

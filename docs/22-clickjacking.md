@@ -34,6 +34,21 @@ The canonical overlay from the PortSwigger material puts the target frame *on to
 
 The victim sees the decoy ("Win a prize") and clicks the button. Because the transparent target frame is the topmost layer at those coordinates, the browser routes the click into the framed cross-origin button (for example "Delete account", "Transfer funds", "Authorize app"). The framed request carries the victim's session cookie automatically, so the server processes it as a fully authenticated action.
 
+```mermaid
+sequenceDiagram
+  participant Victim
+  participant Browser
+  participant Attacker as Attacker page (decoy UI)
+  participant Target as Target site (framed)
+  Victim->>Browser: Opens attacker page
+  Browser->>Attacker: Render decoy button, e.g. Claim your prize
+  Browser->>Target: Load target page in transparent iframe, victim's session cookie attached
+  Note over Browser,Target: No X-Frame-Options or frame-ancestors, target iframe stacked on top and invisible
+  Victim->>Browser: Clicks the visible decoy button
+  Browser->>Target: Click routed through to the real button beneath, e.g. Delete account
+  Target-->>Browser: Processes click as a legitimate authenticated action
+```
+
 Two stacking strategies exist, and knowing both matters:
 
 - **Target on top, transparent (above).** The invisible target intercepts the click. Simple, single click.

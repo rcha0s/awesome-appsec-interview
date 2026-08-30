@@ -33,6 +33,34 @@ The mental model that scores in interviews: name the **source** (where untrusted
 - **DOM-based**: the taint flow is client-side only. Server-side filters and WAFs are blind to it because the payload can live in `location.hash` (never sent to the server) or in `document.cookie`, `postMessage`, `localStorage`, `window.name`, or `document.referrer`.
 - **Blind**: a stored XSS whose sink you cannot observe (an internal admin dashboard, a SOC log viewer, a CRM ticket screen). You confirm it with an out-of-band callback (a loaded `img`/`fetch` to a server you control, for example with a Burp Collaborator or XSS Hunter style payload) that fires when a privileged user renders your input.
 
+```mermaid
+flowchart TD
+  subgraph Reflected
+    R1[Attacker crafts link, payload in query param] --> R2[Victim clicks link]
+    R2 --> R3[Browser sends GET to vulnerable site]
+    R3 --> R4[Site reflects unescaped payload in HTML response]
+    R4 --> R5[Browser executes payload in site's origin]
+  end
+
+  subgraph Stored
+    S1[Attacker submits payload once] --> S2[Payload persisted server-side]
+    S2 -. later .-> S3[Any victim loads the page normally]
+    S3 --> S4[Second, unrelated request reads stored payload]
+    S4 --> S5[Server renders payload into HTML response]
+    S5 --> S6[Browser executes payload in site's origin]
+  end
+
+  subgraph DOMBased["DOM-based"]
+    D1[Victim clicks link, payload in URL fragment] --> D2[Browser loads page normally, server never sees the fragment]
+    D2 --> D3[Client-side JS reads location.hash]
+    D3 --> D4[JS writes value into innerHTML, an unsanitized sink]
+    D4 --> D5[Payload executes purely client-side]
+  end
+
+  classDef atk fill:#fee,stroke:#900
+  class R1,S1,D1 atk
+```
+
 ### Sources and sinks (DOM XSS)
 
 Common **sources** (attacker-influenced): `location` and its parts (`location.href`, `location.search`, `location.hash`, `location.pathname`), `document.URL`, `document.referrer`, `window.name`, `document.cookie`, `postMessage` event `data`, `localStorage`/`sessionStorage`, and reflected/stored values the server injected into a JS variable.

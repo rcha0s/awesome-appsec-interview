@@ -50,6 +50,19 @@ Access-Control-Max-Age: 240
 
 Only if the preflight approves the method and headers does the browser send the real request. This is why requiring a custom header is a CSRF defense: the header forces a preflight the server can decline.
 
+```mermaid
+sequenceDiagram
+  participant Page as Attacker-origin page
+  participant API as Target API
+  Note over Page: Victim is logged in, session cookie present in the browser
+  Page->>API: OPTIONS /data, Origin: attacker-origin, Access-Control-Request-Method
+  API-->>Page: Access-Control-Allow-Origin reflects the request Origin, Access-Control-Allow-Credentials: true
+  Note over Page: Preflight approved, browser proceeds with the real request
+  Page->>API: GET /data, Origin: attacker-origin, cookie attached automatically
+  API-->>Page: 200 OK, sensitive response body
+  Note over Page: CORS headers permit the read, attacker JS accesses the response
+```
+
 Preflight itself does not follow redirects. If the `OPTIONS` response is a 3xx, the browser aborts the pending request with a CORS error rather than re-preflighting the redirect target. The subsequent real request may follow redirects, but each hop's response must independently satisfy CORS, and a cross-origin redirect re-runs the checks against the new origin. Operationally this means an API gateway that 301s `/api` to `/api/` breaks CORS clients until the client uses the trailing-slash URL directly or the gateway is reconfigured, and a defender cannot assume that an approved preflight implies the browser will surface the final response, because a mid-chain redirect can strip credentials or reject the read.
 
 **Two header-controlling knobs, not one.** `Access-Control-Allow-Headers` appears in the preflight response and names which *request* headers the caller may send. `Access-Control-Expose-Headers` appears on the actual response and names which *response* headers cross-origin JavaScript is allowed to read. By default the browser only exposes the CORS-safelisted response headers (`Cache-Control`, `Content-Language`, `Content-Length`, `Content-Type`, `Expires`, `Last-Modified`, `Pragma`) to script; everything else stays hidden, including any echoed `Authorization`, custom auth tokens, `X-CSRF-Token`, or correlation IDs. A server that emits sensitive material in a response header and then declares `Access-Control-Expose-Headers: *` (or reflects a wildcard) leaks that material over an otherwise-tightened endpoint. The wildcard-with-credentials rule applies here too: on a credentialed response, `*` is treated as the literal string `*`, not a match-all, so the browser's own credentialed-response gating still applies, but the misconfiguration pattern is identical to ACAO reflection and is a second, independent leak surface most candidates forget.

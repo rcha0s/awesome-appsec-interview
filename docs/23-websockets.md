@@ -46,6 +46,20 @@ The important detail: `Sec-WebSocket-Key` is a per-handshake Base64 random value
 
 **Why there is no same-origin enforcement by default.** Unlike `fetch`, opening a cross-origin WebSocket does not trigger a CORS preflight and does not require the server to return `Access-Control-Allow-Origin` before the opener can read data. The browser attaches cookies per normal cookie rules and forwards the `Origin` header, then delegates the entire cross-site trust decision to the server. Once the socket is open, the opener's `onmessage` handler can read *everything* the server sends. That delegation, plus servers that never check `Origin` and never add a token, is the whole basis of CSWSH.
 
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Attacker as Attacker page
+  participant Server as WS server
+  Client->>Server: GET /chat, Upgrade: websocket, Sec-WebSocket-Key, Origin, Cookie
+  Server-->>Client: 101 Switching Protocols, Sec-WebSocket-Accept
+  Note over Client,Server: Persistent bidirectional framed connection, no CORS preflight required to open
+  Attacker->>Server: GET /chat, Upgrade: websocket, Origin: attacker page, cookie attached automatically
+  Note over Server: Origin not validated, cookie alone treated as authentication
+  Server-->>Attacker: 101 Switching Protocols
+  Note over Attacker,Server: Attacker page now holds a live authenticated socket, can send and read
+```
+
 ## Attack techniques
 
 1. **Message tampering into classic server-side injection.** Treat each WebSocket message as just another request parameter. A chat message `{"message":"Hello Carlos"}` may be concatenated into a SQL query, an OS command, an XML parse, or a NoSQL filter on the server. Intercept in Burp's WebSockets view and inject:

@@ -34,6 +34,20 @@ Once the email is changed, the attacker triggers a password reset to that addres
 
 Why the browser cooperates: cookies were designed as ambient, origin-bound (not initiator-bound) credentials. The request to `vulnerable-website.com` carries its cookies regardless of whether the initiating page was `vulnerable-website.com` or `evil.com`. CSRF is the abuse of that design decision. Note that CSRF also applies to any auto-attached credential, so HTTP Basic auth and certificate auth are equally exposed, not just cookies.
 
+```mermaid
+sequenceDiagram
+  participant Victim as Victim browser
+  participant Attacker as Attacker page
+  participant App as vulnerable-website.com
+  Note over Victim: Holds authenticated session cookie for App
+  Victim->>Attacker: Visits attacker-controlled page
+  Attacker-->>Victim: Auto-submitting form targets App's /email/change
+  Victim->>App: POST /email/change, cookie attached automatically
+  App->>App: Validates session cookie only, no CSRF token or origin check
+  App-->>Victim: 200 OK, email changed to attacker-controlled address
+  Note over App: State change processed as authenticated, attacker never touched the session
+```
+
 ## Attack techniques
 
 ### 1. GET-based delivery (self-contained, no attacker site needed)

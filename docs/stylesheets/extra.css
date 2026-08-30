@@ -1,0 +1,23 @@
+/* Diagram presentation. Colors themselves come from mermaid-theme.mjs;
+   this just gives rendered diagrams a card treatment consistent with the
+   rest of the site and keeps wide sequence diagrams from breaking layout
+   on narrow viewports. */
+
+pre.mermaid-source {
+  display: none;
+}
+
+.mermaid-diagram {
+  margin: 1.25em 0;
+  padding: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.25rem;
+  background-color: var(--md-default-bg-color);
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
