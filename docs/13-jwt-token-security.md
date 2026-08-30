@@ -2,6 +2,8 @@
 
 > A JWT (almost always a JWS, a signed token) is a self-contained, stateless credential: the server keeps no record of what it issued, so trust rests entirely on the recipient re-deriving and verifying the signature over the exact bytes it received. Every high-impact JWT bug is a failure of that verification step: the server either does not check the signature, checks it with an attacker-influenced algorithm or key, or checks the signature correctly but never validates the claims (exp, aud, iss). Because the token is the identity, forging one is instant privilege escalation or account takeover, and because it is stateless, revoking a leaked one is the hard problem.
 
+**Interview frequency:** Core
+
 ## How it works
 
 A JWS is three base64url segments joined by dots: `header.payload.signature`. Base64url (RFC 4648 section 5) uses `-` and `_` instead of `+` and `/` and strips `=` padding, so the token is URL-safe and header-safe. Only the signature is cryptographic; the header and payload are encoded, not encrypted, and anyone holding the token can read them.
@@ -71,11 +73,11 @@ sequenceDiagram
 
 ## Attack techniques
 
-1. Unverified signature (decode instead of verify).
+### 1. Unverified signature (decode instead of verify)
 
 Libraries expose both a verifying call and a non-verifying decode. In Node `jsonwebtoken`, `jwt.verify(token, key)` checks the signature and `jwt.decode(token)` does not. Developers who route inbound tokens through `decode()` accept any signature. Confirmation: take a valid token, flip a claim (`"role":"admin"`), leave the signature untouched or garbage, and see if access is granted. Why it works: the server never re-derives the MAC/signature, so the payload is fully attacker-controlled.
 
-2. `alg: none` (unsecured JWS).
+### 2. `alg: none` (unsecured JWS)
 
 RFC 7519 defines an "unsecured" JWT where `alg` is `none` and the signature segment is empty. Set the header to `{"alg":"none"}`, tamper the payload, and send `header.payload.` (trailing dot required, signature empty).
 
@@ -85,7 +87,7 @@ eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.
 
 Servers commonly reject the literal string `none`, so bypass the string filter with case and encoding tricks: `None`, `NONE`, `nOnE`. Tim McLean's 2015 disclosure (auth0 blog, "Critical vulnerabilities in JSON Web Token libraries") documented libraries that treated `none` as a verified signature; CVE-2015-9235 covers this in Node `jsonwebtoken` before 4.2.2. Why it works: the `alg` value is attacker-controlled input read before any trust is established.
 
-3. Weak HMAC secret (offline brute force).
+### 3. Weak HMAC secret (offline brute force)
 
 If HS256 is used with a guessable or default secret (a copy-pasted `secret`, `changeme`, a framework placeholder), capture one valid token and crack it offline. No requests hit the server, so it is fast and silent.
 
@@ -96,7 +98,7 @@ hashcat -a 0 -m 16500 <jwt> jwt.secrets.list
 
 `jwt_tool` (ticarpi) and John the Ripper do the same. Wallarm publishes a well-known-secrets wordlist. Once the secret is known, forge any header/payload and re-sign with valid HS256. Why it works: HMAC security collapses to the entropy of the secret, and cracking is entirely local.
 
-4. RS256 to HS256 algorithm confusion (key confusion).
+### 4. RS256 to HS256 algorithm confusion (key confusion)
 
 The server intends RS256 and calls an algorithm-agnostic verify with its RSA public key. If the attacker submits a token whose header says `alg: HS256`, the library treats the RSA public key bytes as an HMAC secret. Since the public key is public, the attacker signs the forged token with `HMAC-SHA256(data, publicKeyPEM)` and verification passes.
 
@@ -114,7 +116,7 @@ Signature: HMACSHA256(b64url(header)+"."+b64url(payload), <server RSA public key
 
 Why it works: one generic `verify(token, key)` dispatches on the untrusted `alg` header, so the same key material is interpreted under two incompatible algorithms.
 
-5. Header-parameter injection: embedded `jwk`.
+### 5. Header-parameter injection: embedded `jwk`
 
 JWS allows an inline public key in the `jwk` header. A misconfigured server verifies using whatever key is embedded rather than a pinned allowlist. Generate your own RSA keypair, embed the public key in `jwk`, sign with your private key.
 
@@ -128,7 +130,7 @@ JWS allows an inline public key in the `jwk` header. A misconfigured server veri
 
 Burp JWT Editor "Embedded JWK" attack automates this and syncs `kid`. Real case: CVE-2018-0114 in Cisco's `node-jose` accepted an embedded JWK and verified against it. Why it works: the token carries its own trust anchor.
 
-6. Header-parameter injection: `jku` / `x5u` (attacker JWK Set / cert URL).
+### 6. Header-parameter injection: `jku` / `x5u` (attacker JWK Set / cert URL)
 
 `jku` points the server at a JWK Set URL; `x5u` at an X.509 cert URL. If the host allowlist is missing or bypassable, point it at attacker-controlled infrastructure hosting your public key.
 
@@ -138,7 +140,7 @@ Burp JWT Editor "Embedded JWK" attack automates this and syncs `kid`. Real case:
 
 Bypass weak host filtering with the same URL-parsing and SSRF tricks used elsewhere (`@`, embedded credentials, open redirect on the trusted host, DNS games). Why it works: the server fetches key material from an untrusted, attacker-influenced location.
 
-7. Header-parameter injection: `kid` path traversal, SQLi, and static-file signing.
+### 7. Header-parameter injection: `kid` path traversal, SQLi, and static-file signing
 
 `kid` selects a key by an arbitrary developer-defined string (file path, DB row). If it feeds a filesystem lookup, traverse to a file whose contents you control or can predict, then sign HS256 with that file's bytes as the secret.
 
@@ -148,11 +150,11 @@ Bypass weak host filtering with the same URL-parsing and SSRF tricks used elsewh
 
 `/dev/null` reads as empty, so signing HS256 with an empty-string secret yields a valid signature the server reproduces. If `kid` feeds a SQL query, it is a SQL injection sink: `kid` values like `nonexistent' UNION SELECT 'attacker-known-key'-- ` can make the query return an attacker-known key. Why it works: `kid` is untrusted input used to select trusted key material.
 
-8. Other header abuse.
+### 8. Other header abuse
 
 `cty` (content type) set to `text/xml` or `application/x-java-serialized-object` can open XXE or deserialization if signature verification is already bypassed. `x5c` (embedded cert chain) is a `jwk`-style self-signed injection plus X.509 parser attack surface (PortSwigger cites CVE-2017-2800 and CVE-2018-2633 for X.509 parsing bugs).
 
-9. Claim-validation gaps and cross-service confusion.
+### 9. Claim-validation gaps and cross-service confusion
 
 Even with a perfect signature, failing to validate claims is exploitable:
 
@@ -161,19 +163,19 @@ Even with a perfect signature, failing to validate claims is exploitable:
 - No `iss` check: tokens from an unexpected issuer are trusted.
 - `alg`/`typ` not pinned: opens confusion and the `none` family.
 
-10. ECDSA "Psychic Signatures" (CVE-2022-21449).
+### 10. ECDSA "Psychic Signatures" (CVE-2022-21449)
 
 Java 15 to 18 (Neil Madden, ForgeRock, 2022) accepted an ECDSA signature with `r = s = 0` as valid for ES256/ES384/ES512. A JWT with a two-zero signature verified against any P-256 public key, forging ES-signed tokens with no key knowledge. It is the modern analogue of `alg: none` for asymmetric tokens and a favourite interview curveball.
 
-11. ID-token-as-access-token substitution (OIDC to OAuth crossover).
+### 11. ID-token-as-access-token substitution (OIDC to OAuth crossover)
 
 OpenID Connect ID tokens and OAuth 2.0 access tokens are both JWTs signed by the same issuer, often with the same key, and they differ only in claims. An ID token's `aud` is the OIDC client ID and its purpose is to authenticate the end user to that client; an access token's `aud` is the resource API and its purpose is to authorize API calls. If a resource server verifies signature, `iss`, and `exp` but skips `aud` and `typ`, an attacker who obtains an ID token for user X (routine in an OIDC login flow) can present it as `Authorization: Bearer <id_token>` and authenticate as X against the API.
 
 The mechanism is claim-shape confusion: the ID token has `sub` and no `scope`, so a resource server that trusts `sub` as the caller identity and treats missing `scope` as "no restrictions" grants full user access. The same trick works between microservices that share an issuer whenever `aud` is unchecked, and between a legacy `typ: JWT` deployment and a newer `typ: at+jwt` deployment when the newer service accepts either type.
 
-RFC 9068 (JWT Profile for OAuth 2.0 Access Tokens) fixes this by requiring access tokens carry `typ: at+jwt` in the JOSE header, so an ID token (which is `typ: JWT`) cannot be presented at an access-token endpoint by a strict verifier. RFC 8725 section 3.11 generalizes this as "Use Explicit Typing": pin `typ` per endpoint class and refuse anything else. In practice, resource servers that only check signature and `iss` are the majority of real-world OAuth breaches in this class.
+RFC 9068 (JWT Profile for OAuth 2.0 Access Tokens) fixes this by requiring access tokens carry `typ: at+jwt` in the JOSE header, so an ID token (which is `typ: JWT`) cannot be presented at an access-token endpoint by a strict verifier. RFC 8725 section 3.11 generalizes this as "Use Explicit Typing": pin `typ` per endpoint class and refuse anything else. In practice, resource servers that only check signature and `iss` are the majority of real-world OAuth breaches in this class. See [14-oauth-oidc.md](14-oauth-oidc.md) for where the ID token sits in the full Authorization Code flow and the client-side defenses around it.
 
-12. JWE-specific attacks (invalid curve, PBES2 iteration DoS, compression oracle).
+### 12. JWE-specific attacks (invalid curve, PBES2 iteration DoS, compression oracle)
 
 JWE (RFC 7516) encrypts the payload rather than just signing it, and its algorithm surface introduces failure modes JWS does not have.
 
@@ -185,7 +187,9 @@ Compression oracle via `zip: DEF`: JWE permits DEFLATE compression of the plaint
 
 ## Defense
 
-Ordered by how much attack surface each removes. This maps to RFC 8725 (BCP 225, "JSON Web Token Best Current Practices", Feb 2020) and the OWASP JWT cheat sheets.
+This maps to RFC 8725 (BCP 225, "JSON Web Token Best Current Practices", Feb 2020) and the OWASP JWT cheat sheets. Ordered by how much attack surface each removes within its group.
+
+### Real fix
 
 1. Pin the algorithm; never trust `alg` from the token (RFC 8725 section 3.1, "Perform Algorithm Verification"). The verifier must be told which algorithm(s) are acceptable and reject everything else, rather than reading `alg` and dispatching on it. In Node `jsonwebtoken`: `jwt.verify(token, key, { algorithms: ['RS256'] })`. In Java `auth0/java-jwt`: build the verifier with a fixed algorithm, `JWT.require(Algorithm.HMAC256(key)).build()`, so a `none` or swapped `alg` throws. This single control kills `alg: none`, unexpected-algorithm acceptance, and RS256-to-HS256 confusion.
 
@@ -199,39 +203,23 @@ Ordered by how much attack surface each removes. This maps to RFC 8725 (BCP 225,
 
 6. Validate every claim, not just the signature. Enforce `exp` (with small clock skew), `nbf`, `iss` against an expected issuer, and `aud` against this service's identifier (RFC 8725 sections 3.8 and 3.9). Use `typ`/explicit typing (RFC 8725 section 3.11) and mutually exclusive validation rules per token kind (section 3.12) to stop cross-JWT and ID-token/access-token substitution. For OAuth access tokens, require `typ: at+jwt` per RFC 9068 and refuse tokens with `typ: JWT` at API endpoints; that one check blocks the ID-token-as-access-token class outright.
 
-7. Storage and transport. A JWT in `localStorage` is readable by any XSS and is exfiltrated instantly; a token in an `HttpOnly; Secure; SameSite` cookie is not script-readable but then needs CSRF defenses (CSRF token or SameSite). OWASP's token-sidejacking mitigation binds the token to a browser context: issue a high-entropy random value as a `__Secure-Fgp` hardened cookie (`HttpOnly; Secure; SameSite=Strict`) and store only its SHA-256 in the JWT (`userFingerprint` claim); at verification, hash the cookie and require it to equal the claim. A stolen token alone is then useless without the paired cookie, and storing the hash (not the raw value) means XSS reading the token cannot reconstruct the cookie. Keep token lifetimes short (OWASP suggests 15 to 30 minute idle, an absolute cap such as 8 hours) and add a strict Content-Security-Policy.
+7. Do not compress-then-encrypt (JWE), do not put secrets in the payload (it is only encoded, not confidential), and avoid tokens in URLs (they leak via logs and Referer).
 
-8. Revocation and refresh-token rotation. Access tokens should be short-lived; a long-lived refresh token (opaque, server-stored) mints new access tokens. Rotate the refresh token on every use and keep a per-family lineage: if a previously-used (rotated-out) refresh token is presented again, that signals theft, so revoke the entire family (reuse detection). For access-token revocation before expiry, keep a server-side denylist keyed on a SHA-256 digest of the token (or its `jti`) with a TTL equal to the token's remaining life; check it on each request. This reintroduces state and is the explicit tradeoff of stateless JWTs.
+### Defense in depth
 
-9. Sender-constrained tokens (proof-of-possession) as the structural fix for token theft. Fingerprint cookies raise the bar for pure XSS exfiltration but do nothing against a compromised TLS-terminating proxy or a leaked log line. The invariant is that the token alone must not authenticate a request: the caller must also prove possession of a key bound to the token.
+1. Storage and transport. A JWT in `localStorage` is readable by any XSS and is exfiltrated instantly; a token in an `HttpOnly; Secure; SameSite` cookie is not script-readable but then needs CSRF defenses (CSRF token or SameSite). OWASP's token-sidejacking mitigation binds the token to a browser context: issue a high-entropy random value as a `__Secure-Fgp` hardened cookie (`HttpOnly; Secure; SameSite=Strict`) and store only its SHA-256 in the JWT (`userFingerprint` claim); at verification, hash the cookie and require it to equal the claim. A stolen token alone is then useless without the paired cookie, and storing the hash (not the raw value) means XSS reading the token cannot reconstruct the cookie. Keep token lifetimes short (OWASP suggests 15 to 30 minute idle, an absolute cap such as 8 hours) and add a strict Content-Security-Policy.
 
-RFC 8705 (OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens) is the mTLS variant. The client presents a TLS client certificate on every API call, and the access token carries a `cnf.x5t#S256` claim containing the SHA-256 thumbprint of that certificate. The resource server confirms the presenting cert's thumbprint matches the claim, so a stolen bearer token replayed from a different TLS session fails. Strong in server-to-server and mobile flows; weaker where a fronting proxy terminates TLS and forwards without the client cert, which quietly re-introduces bearer semantics.
+2. Revocation and refresh-token rotation. Access tokens should be short-lived; a long-lived refresh token (opaque, server-stored) mints new access tokens. Rotate the refresh token on every use and keep a per-family lineage: if a previously-used (rotated-out) refresh token is presented again, that signals theft, so revoke the entire family (reuse detection). For access-token revocation before expiry, keep a server-side denylist keyed on a SHA-256 digest of the token (or its `jti`) with a TTL equal to the token's remaining life; check it on each request. This reintroduces state and is the explicit tradeoff of stateless JWTs.
 
-RFC 9449 (DPoP, "Demonstrating Proof of Possession") is the browser-friendly variant. The client generates an ephemeral keypair (WebCrypto, non-extractable) and, on every API request, sends a `DPoP` header carrying a proof JWT signed with the private key. The proof includes `htu` (HTTP URI), `htm` (method), `iat`, `jti`, and `ath` (SHA-256 of the access token), and the access token carries `cnf.jkt` = SHA-256 of the client's public JWK. The resource server verifies the proof signature, checks `htu`/`htm` match the actual request, replay-caches `jti`, and confirms `jkt` matches the presenting key. A leaked access token cannot be replayed without the private key, and each proof is tied to one request. Common wrong implementation: storing the DPoP private key in an extractable CryptoKey or in JavaScript memory reachable from XSS, which defeats the whole scheme because the same script that steals the token also steals the key. Store the key as `extractable: false` in WebCrypto or in a hardware-backed keystore.
+3. Sender-constrained tokens (proof-of-possession) to narrow blast radius after theft. Fingerprint cookies raise the bar for pure XSS exfiltration but do nothing against a compromised TLS-terminating proxy or a leaked log line. The invariant is that the token alone must not authenticate a request: the caller must also prove possession of a key bound to the token.
 
-10. JWKS key rotation without breaking the world. Publish the JWKS with multiple active keys, each with a distinct `kid`, during rotation. The issuer starts signing new tokens with the new `kid` immediately; verifiers continue to accept tokens signed under the old `kid` until the longest outstanding token's `exp` has passed, so the rotation window must be at least the maximum access-token lifetime. Verifiers cache the JWKS with a bounded TTL and refresh on `kid` miss, but must rate-limit that refresh, because an unauthenticated `kid` in an inbound token is attacker-controlled cache-buster input and a trivial DoS or SSRF amplifier against the JWKS URL. Libraries such as `jwks-rsa` expose `jwksRequestsPerMinute` for exactly this reason.
+   RFC 8705 (OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens) is the mTLS variant. The client presents a TLS client certificate on every API call, and the access token carries a `cnf.x5t#S256` claim containing the SHA-256 thumbprint of that certificate. The resource server confirms the presenting cert's thumbprint matches the claim, so a stolen bearer token replayed from a different TLS session fails. Strong in server-to-server and mobile flows; weaker where a fronting proxy terminates TLS and forwards without the client cert, which quietly re-introduces bearer semantics.
 
-The common wrong implementations: removing the old key too early invalidates in-flight tokens and users get logged out mid-request; refreshing on every miss lets an attacker force outbound requests to the JWKS URL with arbitrary `kid` values; caching indefinitely means a compromised signing key stays trusted long after rotation; and if the JWKS URL is HTTPS but the CA validation is loose or the URL is HTTP behind a "trusted" proxy, an on-path attacker serves a fake JWKS and forges tokens accepted by every verifier that pulled the poisoned cache. Emergency revocation of a compromised signing key requires pushing an updated JWKS, invalidating verifier caches (out-of-band signal or short cache TTL), and relying on short access-token TTLs so the window of forged-token acceptance is bounded.
+   RFC 9449 (DPoP, "Demonstrating Proof of Possession") is the browser-friendly variant. The client generates an ephemeral keypair (WebCrypto, non-extractable) and, on every API request, sends a `DPoP` header carrying a proof JWT signed with the private key. The proof includes `htu` (HTTP URI), `htm` (method), `iat`, `jti`, and `ath` (SHA-256 of the access token), and the access token carries `cnf.jkt` = SHA-256 of the client's public JWK. The resource server verifies the proof signature, checks `htu`/`htm` match the actual request, replay-caches `jti`, and confirms `jkt` matches the presenting key. A leaked access token cannot be replayed without the private key, and each proof is tied to one request. Common wrong implementation: storing the DPoP private key in an extractable CryptoKey or in JavaScript memory reachable from XSS, which defeats the whole scheme because the same script that steals the token also steals the key. Store the key as `extractable: false` in WebCrypto or in a hardware-backed keystore.
 
-11. Do not compress-then-encrypt (JWE), do not put secrets in the payload (it is only encoded), and avoid tokens in URLs (they leak via logs and Referer).
+4. JWKS key rotation without breaking the world, to bound the window a compromised or stale key stays trusted. Publish the JWKS with multiple active keys, each with a distinct `kid`, during rotation. The issuer starts signing new tokens with the new `kid` immediately; verifiers continue to accept tokens signed under the old `kid` until the longest outstanding token's `exp` has passed, so the rotation window must be at least the maximum access-token lifetime. Verifiers cache the JWKS with a bounded TTL and refresh on `kid` miss, but must rate-limit that refresh, because an unauthenticated `kid` in an inbound token is attacker-controlled cache-buster input and a trivial DoS or SSRF amplifier against the JWKS URL. Libraries such as `jwks-rsa` expose `jwksRequestsPerMinute` for exactly this reason.
 
-## Interview-grade nuances
-
-- The core tension: JWTs are prized for statelessness (any of N backends verifies locally, no session store lookup), but statelessness is exactly what makes revocation, logout, and "kick this session now" hard. Any real revocation (denylist, short TTL plus refresh rotation, or reference tokens) trades away the statelessness you adopted JWTs for. Be able to argue when opaque/reference tokens beat JWTs: single-datacenter apps with an existing session store often gain nothing from JWTs and inherit the revocation problem.
-
-- Why RS256-to-HS256 confusion exists at the API level, not the crypto level: HMAC and RSA are both "correct", the bug is a generic `verify(token, key)` that dispatches on attacker-controlled `alg`. The fix is API design (pin the algorithm), which is why RFC 8725 leads with algorithm verification.
-
-- The public key for confusion is rarely secret: JWKS endpoints, TLS certs, and Git-committed keys all leak it, and `sig2n`/`rsa_sign2n` recover it from two tokens when it is not published. "The secret is public" is the whole point of the attack.
-
-- `alg: none` and CVE-2022-21449 are the same failure in two costumes: accepting a token that carries no real proof of possession. One is a string, one is a degenerate ECDSA `(0,0)` signature.
-
-- Base64url is not encryption. Interviewers probe whether candidates conflate "signed" with "confidential". Anything sensitive in a claim is world-readable unless you use JWE; even then, the signature, not the encoding, is what stops tampering.
-
-- Clock skew and `exp`: reject expired tokens but allow a small leeway (30 to 60 seconds) for skew; huge leeway reintroduces replay windows.
-
-- `kid` is a general injection sink, not just traversal: whatever backend it feeds (filesystem, DB, LDAP, cache key) inherits an injection point because it is untrusted input used to pick trusted keys.
-
-- Cross-JWT confusion is an authorization boundary, not a signature bug: shared signing keys or shared issuers across microservices mean a valid token for one audience is a valid forgery for another unless `aud` is checked. This is why RFC 8725 section 3.12 wants mutually exclusive validation rules per token type.
+   The common wrong implementations: removing the old key too early invalidates in-flight tokens and users get logged out mid-request; refreshing on every miss lets an attacker force outbound requests to the JWKS URL with arbitrary `kid` values; caching indefinitely means a compromised signing key stays trusted long after rotation; and if the JWKS URL is HTTPS but the CA validation is loose or the URL is HTTP behind a "trusted" proxy, an on-path attacker serves a fake JWKS and forges tokens accepted by every verifier that pulled the poisoned cache. Emergency revocation of a compromised signing key requires pushing an updated JWKS, invalidating verifier caches (out-of-band signal or short cache TTL), and relying on short access-token TTLs so the window of forged-token acceptance is bounded.
 
 ## Interviewer probes
 
@@ -246,6 +234,22 @@ Principal: Publish both old and new keys in JWKS with distinct `kid`s. Sign new 
 Mid: "What is the difference between an OIDC ID token and an OAuth access token, and why does it matter for a resource server?"
 
 Principal: An ID token authenticates the end user to the OIDC client; its `aud` is the client ID, it carries identity claims like `sub` and `email`, and it is not meant to authorize API calls. An access token authorizes API calls; its `aud` is the resource server, it carries `scope`, and per RFC 9068 it should carry `typ: at+jwt` in the JOSE header. Both are typically signed by the same issuer with the same key, so signature verification alone does not distinguish them. A resource server that checks signature, `iss`, and `exp` but skips `aud` and `typ` accepts an ID token as an access token, and an attacker who logs in via OIDC as user X can hit the API as X. The two-line fix is pin `aud` to this API's identifier and pin `typ` to `at+jwt`; RFC 8725 section 3.11 generalizes this as explicit typing.
+
+Mid: "JWTs are supposed to be stateless. Why do most production systems end up building a way to revoke them anyway?"
+
+Principal: Statelessness means any backend can verify a token locally without a session-store lookup, but that is exactly what makes revocation hard: there is no server-side record to delete. Real revocation always means giving something back: a denylist keyed on a SHA-256 digest or `jti` with a TTL, short access-token lifetimes paired with refresh-token rotation and reuse detection, or opaque reference tokens that require a lookup. Every one of those reintroduces the state lookup you adopted JWTs to avoid. The senior answer names this trade explicitly and knows when to skip JWTs altogether: a single-datacenter app with an existing session store often gains nothing from JWTs and just inherits the revocation problem for free.
+
+Mid: "RS256-to-HS256 confusion mixes a symmetric and an asymmetric algorithm under one key. Isn't that a fundamental cryptographic flaw?"
+
+Principal: No, HMAC and RSA are each correctly implemented; the bug lives at the API layer, not the primitive. A generic `verify(token, key)` call dispatches on the attacker-controlled `alg` header instead of the caller pinning which algorithm is acceptable, so the same key material gets reinterpreted under an incompatible algorithm family. That is also why "the RSA key is public anyway" does not save you: JWKS endpoints, TLS certificates, and Git-committed keys routinely leak it, and even when it is not published, tools like `rsa_sign2n`/`sig2n` recover the modulus from two captured tokens. The fix is API design, pin one algorithm per key and reject anything else, which is why RFC 8725 leads with algorithm verification rather than a crypto-level patch.
+
+Mid: "How does the 2022 Java ECDSA 'Psychic Signatures' bug (CVE-2022-21449) relate to `alg: none`, which is a much older attack?"
+
+Principal: They are the same failure wearing different costumes: a token accepted with no real proof of possession. `alg: none` is the explicit version, an attacker sets the header to an unsecured JWS and an unpatched library treats the empty signature as valid. CVE-2022-21449 is the implicit version: affected Java versions accepted an ECDSA signature with `r = s = 0` as valid against any P-256 public key, so a forged signature with no key knowledge at all passed verification. Recognizing that both are instances of "the verifier never confirmed a real signature was produced," rather than treating them as unrelated bugs from different eras, is the signal of someone who understands JWT verification structurally.
+
+Mid: "A developer wants to put a customer's SSN in a JWT claim because 'it's signed, so it's secure.' What's wrong with that reasoning?"
+
+Principal: Signing proves integrity, not confidentiality. The header and payload are base64url-encoded, not encrypted, so anyone holding the token, in browser storage, a proxy log, or a leaked request, can decode and read every claim without touching the signature. Only a JWS's signature is cryptographic; if the claims themselves need to be hidden you need a JWE, which actually encrypts the payload, and even then the signature or AEAD tag is what stops tampering, not the encoding. Conflating "signed" with "confidential" is a common interview tell, and the practical fix is simple: never put sensitive data in a JWS payload.
 
 ## Sources
 
