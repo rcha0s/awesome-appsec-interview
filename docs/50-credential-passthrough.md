@@ -2,6 +2,8 @@
 
 > A token is a capability, and a capability that can call `Mail.Send` must never be handed to code whose task is `Mail.Read`. Agents break this invariant because the LLM sits between an untrusted input channel (email bodies, retrieved documents, web pages) and a fully privileged credential the human already consented to, so prompt injection rides the token the moment it lands. The token itself carries no way to say "this call was authorized by the user, not by an email body," and passthrough of one high-privilege bearer to every tool collapses the whole design into a confused deputy. The correct pattern is a credential broker that mints per-tool, per-resource, per-turn tokens with the narrowest scope and audience the current step requires, plus sender-constraining so a stolen bearer alone is not enough. The refresh token deserves separate paranoia because a leaked refresh converts a five-minute mistake into a persistent one that survives session end and often lives 30 to 90 days.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

@@ -2,6 +2,8 @@
 
 > MFA is not a checkbox on the login form, it is a claim about which authenticator produced the current session and how recently it was exercised. Every MFA failure at scale, push fatigue at Uber in 2022, SIM swap of high-value accounts, TOTP secrets leaked from a QR-code screenshot, "trust this device for 30 days" cookies stolen from an unlocked laptop, comes from confusing enrolment security with runtime challenge security, or from letting a first-factor password session inherit a step-up assertion forever. The root cause is almost always the same: the server records "user has MFA enabled" as a boolean instead of tracking the Authenticator Assurance Level (AAL), the timestamp of the last successful challenge, and the authenticator id that produced it. A correct implementation binds every sensitive operation to a fresh proof-of-possession by a specific authenticator with rate limits, constant-time verification, and a cryptographic upgrade path from AAL1 to AAL2 or AAL3 that the client cannot forge. This doc treats TOTP, push, SMS, backup codes, and step-up as one system: an authenticator ledger, a per-session AAL value, and a policy engine that raises AAL on demand.
 
+**Interview frequency:** Common
+
 ## Quick reference
 
 Wire-level example: a TOTP verification request, followed by a step-up id_token showing the resulting AMR/ACR claims.

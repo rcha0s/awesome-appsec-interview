@@ -2,6 +2,8 @@
 
 > Retrieval augmented generation extends the trust boundary of an LLM to whatever a nearest-neighbor lookup returns, and the lookup only enforces geometry, not authority. The index treats a vector as a coordinate, not a claim, so anyone who can write to the index or influence its inputs steers what the model reads. Inversion research collapses the last comfort myth that vectors are one-way and shows a 1536-float embedding leaks the source sentence with high fidelity when the encoder is known. Cross-tenant bleed is the same failure at storage granularity, where post-filtering fixes the top-k list after the ANN scan has already ranked another tenant's chunks. Chunker and reranker attacks target the pieces that RAG designers usually treat as configuration, not as attack surface. Cache side channels round it out: even without index write access, timing on the embedding endpoint tells an attacker what other users are asking. The defense pattern is uniform: pre-filter on tenant, sign chunks, treat retrieval as untrusted input into a prompt injection resistant harness, and encrypt at rest.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```http

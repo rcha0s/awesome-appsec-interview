@@ -2,6 +2,8 @@
 
 > Goal hijacking is indirect prompt injection with a specific target: the planner's objective slot, not the current action. The distinction matters because a rewritten objective persists across the loop. One successful injection on turn N steers turns N+1, N+2, and the terminating "answer the user" step at the end is often kept intact, which hides the compromise. The primitive that makes it work is the same context-plane / data-plane fusion described in [34-indirect-prompt-injection.md](./34-indirect-prompt-injection.md), applied to the specific token spans a ReAct-style harness uses to represent state ("Objective:", "Plan:", "Thought:"). Every planner that concatenates observations back into the reasoning context inherits this class. The defense split is therefore identical to indirect injection: the real fix is control-plane / data-plane separation of the planner from any model that reads untrusted text (CaMeL, dual-LLM), and everything else is defense-in-depth.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 Agent trajectory (ReAct-style planner loop), turn N -> turn N+1. Injected text in the tool observation does not add a step; it replaces the planner's objective on the next iteration.

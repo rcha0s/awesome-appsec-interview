@@ -2,6 +2,8 @@
 
 > A container is not a security boundary in the way a VM is. It is a Linux process (or a set of processes sharing a PID namespace) whose view of the world has been narrowed by namespaces, whose resource use is capped by cgroups, whose kernel-facing surface is filtered by seccomp, and whose privilege set is trimmed by capability bits and an LSM (AppArmor or SELinux). The kernel is still shared. That means a single misconfiguration (privileged flag, host mount, dangerous capability, mounted docker socket) or a single kernel bug can put the attacker on the host as root, and from there onto every other container on that node. Escape is the move from that constrained process view to arbitrary code execution in the host's root mount namespace, and it is the most consequential lateral step in a modern cloud attack chain because it turns tenant-scoped RCE into node-scoped RCE.
 
+**Interview frequency:** Situational
+
 ## How it works
 
 ### What a container actually is

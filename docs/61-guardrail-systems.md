@@ -2,6 +2,8 @@
 
 > A guardrail is a classifier plus a policy engine, not a firewall. Every product in this space (Rebuff, Lakera Guard, Meta PromptGuard, Meta LlamaGuard, NVIDIA NeMo Guardrails, Azure AI Content Safety) decomposes into the same four boxes: input classifier, output classifier, deterministic policy engine, and a pattern matcher for cheap known-bad strings. The security value comes from raising attacker cost, not from producing a decidable safe/unsafe boundary, because the underlying task (natural language semantic classification) is not decidable. Every classifier has a measurable false-negative rate on adversarial inputs, and stacking classifiers reduces that rate at the cost of latency and false positives. Principal-level use treats guardrails as a probabilistic control layered on top of architectural controls (spotlighting, tool allow-lists, capability isolation), not as the primary control. When a guardrail is the primary control, the system is one adversarial suffix, one translation, or one Base64 wrap away from failure.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

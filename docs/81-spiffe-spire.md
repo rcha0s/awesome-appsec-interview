@@ -2,6 +2,8 @@
 
 > Workload identity replaces the bearer-token-in-a-config-file pattern with a cryptographic identity issued to a running process by a trusted local attestor. SPIFFE defines the identity (a URI like `spiffe://prod.example.com/ns/payments/sa/api`) and how it embeds in an X.509 or JWT SVID. SPIRE is the reference control plane: a Server that mints SVIDs and per-node Agents that attest workloads through kernel and orchestrator evidence (uid, cgroup, k8s pod labels, AWS IID). The security of the whole system reduces to one question: does the Agent's workload attestation actually prove the caller is the workload named by the selector, or can a co-tenant forge the evidence. Every real SPIRE incident is either a weak selector (attestation bypass), a leaky Workload API socket, an unverified federation bundle, or an SVID with a lifetime long enough that revocation becomes fiction.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 X.509-SVID: an ordinary X.509 leaf certificate whose only Subject Alternative Name is a `URI` extension holding the SPIFFE ID. No DNS SAN, no CN identity, no email. RFC 5280 URI-SAN semantics are what a verifier checks.

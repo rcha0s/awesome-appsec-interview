@@ -2,6 +2,8 @@
 
 > Long-term memory is a write-once-read-many injection channel with the trust label of a system rule and the input hygiene of a text field. The fatal design choice is not the vector store, it is treating a summarizer's output as if a human curator had approved it, then loading that output at prompt-assembly time into a higher tier than freshly retrieved documents. Vector-keyed reads collapse the tenant boundary because ANN similarity does not know who wrote the record; a global namespace turns any single-tenant write into a cross-tenant read. TTL absent plus provenance absent plus no admin surface means the poisoned record is discovered only when a victim's behavior visibly diverges, which for silent tool calls (funds transfer, code push, calendar send) is after the damage. Short-term scratchpad, session memory, and long-term memory need distinct trust tiers with different write paths; conflating them is the class bug. Retrieval augmentation problems (see [41-vector-embedding-weaknesses.md](./41-vector-embedding-weaknesses.md)) and dataset poisoning (see [37-data-and-model-poisoning.md](./37-data-and-model-poisoning.md)) both feed this class, and prompt injection (see [30-web-llm-attacks.md](./30-web-llm-attacks.md)) is the delivery vehicle.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```jsonc

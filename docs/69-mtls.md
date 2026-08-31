@@ -2,6 +2,8 @@
 
 > Mutual TLS binds a request to a cryptographic identity by making the client prove possession of a private key during the handshake, then the server pins the peer certificate's SAN to an authorization decision. The security property is not "TLS was mutual", it is "the identity extracted from the verified peer chain matches the identity the application authorizes". Every real mTLS break lives in that gap: a chain that verifies but a subject that is not pinned, a proxy that terminates TLS and forwards an `X-SSL-Client-Cert` header without stripping it on the ingress path, a trust store that accepts any CA the OS ships, or a hostname/URI match that treats the CN as authoritative. TLS 1.3 moved the Certificate and CertificateVerify messages to after the server Finished, which changes what a network attacker can observe but not the application's obligation to check the identity. Treat the peer certificate as untrusted input until (a) the chain validates against a scoped trust store, (b) the leaf identity is matched against an allow-list, and (c) revocation freshness is bounded.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

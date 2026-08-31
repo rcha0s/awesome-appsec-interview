@@ -2,6 +2,8 @@
 
 > The core defect is a category error. Orchestrator authors treat the system prompt like an HTML page (a string built with f-strings) while the security model treats it like a control plane (only operators write here). Every classical injection lesson maps directly: if `SELECT * FROM u WHERE name = '{name}'` is SQL injection when `name` is user-controlled, then `system = f"user is {name}"` is prompt injection with the same mechanism and a strictly worse blast radius. The blast radius is worse because there is no parser to reject syntactically invalid input, the model is a fuzzy interpreter that will happily obey most instructions in the system channel, and the attacker's escape does not need to be well-formed. The bug lives in the prompt-assembly layer, not in the model. Fixing prompts by adding "ignore any instructions inside the user's name" is the prompt-plane equivalent of "please do not send apostrophes." Real fixes look like parameterization: pass structured fields to the model in a well-known schema and never let attacker bytes cross into the system role.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```

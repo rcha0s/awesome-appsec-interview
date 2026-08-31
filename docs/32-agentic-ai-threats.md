@@ -2,6 +2,8 @@
 
 > **Mental model:** an agent is an LLM wired into a control loop that reads state, picks a tool, executes it, folds the result back into context, and iterates until a stopping condition. The security problem is that every element of that loop (the goal, the plan, the tool arguments, the retrieved data, the memory tier, the peer agent's output) is text in the same context window, and none of it is authenticated. Any of it can carry instructions. Blast radius scales with the union of permissions the agent holds across tools, so a single indirect prompt injection reaches whatever the least-restricted tool can do. Prompt-injection primitives are covered in [30-web-llm-attacks.md](./30-web-llm-attacks.md); this doc is about what changes when the model is autonomous, has persistent memory, calls peers, and reasons over multiple turns. OWASP frames this domain in the Agentic AI Threats and Mitigations initiative (2025) and slices of the OWASP LLM Top 10 (LLM06 excessive agency, LLM01 prompt injection, LLM03 supply chain, LLM08 vector-and-embedding weaknesses).
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```json

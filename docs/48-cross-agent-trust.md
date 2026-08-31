@@ -2,6 +2,8 @@
 
 > Agent to agent traffic looks like RPC, so engineers reason about it as RPC, but the payload is instructions to a language model, not arguments to a function. The security boundary is not the socket, it is the point where another agent's `parts[].text` gets concatenated into a prompt the receiver will act on. Every invariant below names one place that boundary is silently crossed: identity spoofed at the header, capability lied about at the AgentCard, provenance lost at the shared kanban, tenant mixed at the task store, callback pointed at 169.254.169.254. Treat every peer agent as a mutually distrustful tenant in a multi tenant system, with the extra rule that its output is prompt injection until proven otherwise. The protocol gives you identifiers (agent ID, task ID, artifact hash); the platform has to actually check them, and the receiver has to keep the semantic content in the data lane. That single trust assumption, that a parsed A2A message from a TLS peer is authoritative, is the whole class.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```http

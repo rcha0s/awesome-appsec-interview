@@ -2,6 +2,8 @@
 
 > A webhook is an outbound HTTP callback from a sender service to a URL the receiver registered, delivered when an event happens. The receiver has no way to independently verify that the caller is the sender and that the event actually occurred, so trust must be established cryptographically at the request layer. HMAC over a canonical string with a shared per-tenant secret is dominant in production; JWT-signed payloads over asymmetric keys published via JWKS and mTLS for private inter-service delivery cover the multi-consumer and private-network cases. The load-bearing invariants are that the signature covers the full body plus a timestamp and that verification runs in constant time before any body parsing, with the timestamp checked against a narrow window. Every real webhook incident traces back to one of those three invariants being violated, plus a fourth invariant on the sender side, which is that senders must not dispatch to URLs unvalidated against SSRF and redirect rules.
 
+**Interview frequency:** Common
+
 ## How it works
 
 A webhook flow has two independent trust boundaries and both can fail. The **sender** dispatches an HTTP POST to a URL the receiver configured, carrying an event payload (JSON, typically) and one or more signing headers. The **receiver** exposes a public HTTP endpoint (there is no other way for the sender to reach it from the internet) and must decide whether to act on the request. The receiver cannot rely on network-layer identity because the request arrived over TLS from whatever egress IP the sender's outbound fleet happens to use today, and IP allocations drift.

@@ -2,9 +2,11 @@
 
 > Authentication answers "who are you"; access control answers "are you allowed to perform this action, on this specific object, in this state". Broken access control is the application enforcing the first question and skipping, fumbling, or trusting the client for the second. The root cause is almost always the same shape: an authorization decision that depends on data the attacker controls (an ID in the path, a role in a cookie, a claim in a JWT, the fact that a URL "isn't linked anywhere") instead of a server-side check that binds the authenticated principal to the requested resource and operation. It is OWASP Top 10 A01:2021, the category with the most occurrences in the contributed dataset (over 318,000 across 34 mapped CWEs and roughly 19,000 CVEs), and it is invisible to scanners that do not know the application's intended policy. The durable fix is invariant: deny by default, enforce server-side, authorize per object and per function on every request.
 
+**Interview frequency:** Core
+
 ## How it works
 
-Access control sits on top of two other mechanisms and fails when either is trusted to do authorization's job. PortSwigger frames the dependency precisely: authentication confirms the user is who they claim, session management identifies which subsequent requests come from that same user, and access control decides whether that user may carry out the attempted action. When the third layer is missing or leaky, an authenticated (or even anonymous) user reaches data and functions outside their intended permissions.
+Access control sits on top of two other mechanisms and fails when either is trusted to do authorization's job. PortSwigger frames the dependency precisely<sup>[[1]](#ref1)</sup>: authentication confirms the user is who they claim, session management identifies which subsequent requests come from that same user, and access control decides whether that user may carry out the attempted action. When the third layer is missing or leaky, an authenticated (or even anonymous) user reaches data and functions outside their intended permissions.
 
 There are three families of controls, and the vocabulary matters in interviews.
 
@@ -15,8 +17,8 @@ There are three families of controls, and the vocabulary matters in interviews.
 Precise terms for the same underlying defect across web and API worlds:
 
 - **IDOR (Insecure Direct Object Reference)**: user-supplied input is used to access an object directly and the app authorizes on authentication alone, not ownership. The term was popularized by the OWASP 2007 Top Ten. It is one instance of a broader access-control failure, most often horizontal, sometimes vertical.
-- **BOLA (Broken Object Level Authorization)**: the API name for IDOR and API1:2023, rated widespread prevalence and easy exploitability. The authorization violation happens at the object level by manipulating an ID.
-- **BFLA (Broken Function Level Authorization)**: API5:2023, a missing check on the function/endpoint itself (a regular user invoking an admin-only action). BOLA is "wrong object, allowed function"; BFLA is "wrong function entirely".
+- **BOLA (Broken Object Level Authorization)**: the API name for IDOR and API1:2023<sup>[[2]](#ref2)</sup>, rated widespread prevalence and easy exploitability. The authorization violation happens at the object level by manipulating an ID.
+- **BFLA (Broken Function Level Authorization)**: API5:2023<sup>[[3]](#ref3)</sup>, a missing check on the function/endpoint itself (a regular user invoking an admin-only action). BOLA is "wrong object, allowed function"; BFLA is "wrong function entirely".
 - **BOPLA (Broken Object Property Level Authorization)**: API3:2023, which merged the old Excessive Data Exposure and Mass Assignment into one root cause: missing authorization at the property level, letting an attacker read fields they should not see or write fields they should not set.
 
 The canonical vulnerable pattern is a query keyed directly on client input with no ownership predicate:
@@ -37,6 +39,25 @@ SELECT * FROM invoices WHERE id = :id AND owner_id = :current_user_id;
 ```
 
 The mental shortcut for reviewing any endpoint: find the object being touched, then ask "where is the line of code that proves this principal owns or is permitted this object for this verb". If that line does not exist, or it checks only `isAuthenticated()`, it is broken.
+
+## Quick reference
+
+```
+GET /customer_account?customer_number=132355   -> change to 132356
+# The session proves who you are; the ID alone is trusted to prove you're
+# allowed to see this record. Increment it and you're reading someone
+# else's account with no ownership check performed.
+```
+
+| Invariant | Where enforced | How violated | Source |
+|---|---|---|---|
+| Every request re-derives permission from the server-side principal, never from the mere fact of being authenticated | Central, mandatory authorization check invoked from every business function | A valid session plus a valid object ID is treated as sufficient; no line of code ever checks ownership (direct object reference swap) | <sup>[[1]](#ref1)</sup> |
+| Object access is scoped by ownership (`resource.owner == currentUser`) or an ABAC/ReBAC policy, never by the difficulty of guessing the identifier | Domain-model / policy check at the point of access | Switching sequential IDs to GUIDs raises guessing cost but the object is still returned with no ownership check once a GUID leaks (unpredictable IDs are not authorization) | <sup>[[2]](#ref2)</sup> |
+| Data-layer queries carry an `owner_id`/`tenant_id` predicate, not just an application-layer `if` check | Persistence-layer query (`WHERE owner_id = :currentUser AND tenant_id = :currentTenant`) | A query scoped only by a client-supplied tenant/shop identifier returns another tenant's data (cross-tenant IDOR) | <sup>[[2]](#ref2)</sup> |
+| Request bodies bind only to an allowlisted DTO, never directly to the persistence model | Controller/serialization layer (strong params, `@InitBinder` allowlist, `$fillable`) | Extra JSON fields (`isAdmin`, `role`, `balance`) get silently persisted because the controller autobinds straight to the domain model (mass assignment / BOPLA) | <sup>[[4]](#ref4)</sup> |
+| Function-level (role) gating is enforced centrally and applies uniformly across verbs, paths, and encodings | Admin abstract controller / centralized middleware, path-normalized before matching | HTTP verb tampering, method-override headers, and path-normalization discrepancies let a request reach an admin route the front-end control never matched | <sup>[[3]](#ref3)</sup> |
+| The authorization check and the state-changing write happen in a single atomic transaction, not a separate preflight read | `SELECT ... FOR UPDATE` or a conditional `UPDATE ... WHERE owner_id=:u AND status='paid'`, treating zero affected rows as denial | A permission read and a later write are separated by a window a concurrent request can race through (TOCTOU) | <sup>[[6]](#ref6)</sup> |
+| Object-level checks run per array/batch item, not once for the whole request | Batch/GraphQL resolver-level authorization, re-checked per item or field | Batch endpoints and GraphQL aliases authorize only the top-level operation, so mixing your own IDs with victim IDs slips unauthorized items through the loop | <sup>[[2]](#ref2)</sup> |
 
 ## Attack techniques
 
@@ -86,7 +107,7 @@ Content-Type: application/json
 {"username":"alice","email":"alice@x.com","isAdmin":true,"balance":999999,"role":"admin","emailVerified":true}
 ```
 
-The server binds `isAdmin`, `role`, `balance`, and `emailVerified` because the controller bound straight to the persistence model. **Exploitability** (per OWASP) rises when the attacker can guess common sensitive field names or read the model source, and when the object has an empty constructor. **Real case**: in 2012 GitHub was compromised via mass assignment; a user added their public key to an arbitrary organization, gaining commit access to its repositories. Detection: submit extra fields (`isAdmin`, `verified`, `owner_id`, `tenant_id`, primary keys) and diff the resulting object; success is a privilege or ownership field that changed.
+The server binds `isAdmin`, `role`, `balance`, and `emailVerified` because the controller bound straight to the persistence model. **Exploitability** (per OWASP)<sup>[[4]](#ref4)</sup> rises when the attacker can guess common sensitive field names or read the model source, and when the object has an empty constructor. **Real case**: in 2012 GitHub was compromised via mass assignment<sup>[[5]](#ref5)</sup>; a user added their public key to an arbitrary organization, gaining commit access to its repositories. Detection: submit extra fields (`isAdmin`, `verified`, `owner_id`, `tenant_id`, primary keys) and diff the resulting object; success is a privilege or ownership field that changed.
 
 ### 6. Forced browsing to unprotected functionality (vertical)
 
@@ -154,7 +175,7 @@ A workflow enforces access control on steps 1 and 2 but assumes anyone reaching 
 
 ### 12. Cross-tenant IDOR (multi-tenant SaaS)
 
-Access tenant B's data with tenant A's valid session because a query is scoped by a client-supplied tenant/org ID instead of the server-side tenant binding. BOLA scenario from OWASP: `/shops/{shopName}/revenue_data.json`, where enumerating shop names from another endpoint yields the sales data of thousands of stores. Tenant bleed also hides in shared caches, exported reports, webhooks, search indexes, and background jobs that drop the tenant filter.
+Access tenant B's data with tenant A's valid session because a query is scoped by a client-supplied tenant/org ID instead of the server-side tenant binding. BOLA scenario from OWASP<sup>[[2]](#ref2)</sup>: `/shops/{shopName}/revenue_data.json`, where enumerating shop names from another endpoint yields the sales data of thousands of stores. Tenant bleed also hides in shared caches, exported reports, webhooks, search indexes, and background jobs that drop the tenant filter.
 
 ### 13. Batch and bulk endpoint IDOR (array parameters, GraphQL aliases, JSON:API includes)
 
@@ -186,11 +207,13 @@ Automated scanners are weak here because they do not know the intended policy; a
 
 ## Defense
 
-Ordered by effectiveness. The first three are the real fix; the rest are defense in depth.
+Ordered by effectiveness within each group.
 
-1. **Deny by default and enforce server-side on every request.** Except for intentionally public resources, deny. Make the authorization check mandatory and central, invoked from every business function, in trusted server-side or serverless code the attacker cannot modify. Validate permissions on every request regardless of source (AJAX, server-render, internal). A single missed check is a breach: "validating on the majority of requests is insufficient" (Authorization Cheat Sheet).
+### Real fix
 
-2. **Authorize by ownership/policy, not by reference secrecy.** Enforce record ownership in the domain model: check `resource.owner == currentUser` (or an ABAC/ReBAC rule) rather than assuming an unguessable ID protects the object. Comparing the JWT user ID to the request's ID param covers only a small subset of cases; real authorization considers the user's policies and hierarchy (OWASP BOLA guidance). Prefer not exposing identifiers at all: derive the object from the session/JWT where possible, or use per-user indirect references. Map to CWE-639 (Authorization Bypass Through User-Controlled Key).
+1. **Deny by default and enforce server-side on every request.** Except for intentionally public resources, deny. Make the authorization check mandatory and central, invoked from every business function, in trusted server-side or serverless code the attacker cannot modify. Validate permissions on every request regardless of source (AJAX, server-render, internal). A single missed check is a breach: "validating on the majority of requests is insufficient" (Authorization Cheat Sheet)<sup>[[6]](#ref6)</sup>.
+
+2. **Authorize by ownership/policy, not by reference secrecy.** Enforce record ownership in the domain model: check `resource.owner == currentUser` (or an ABAC/ReBAC rule) rather than assuming an unguessable ID protects the object. Comparing the JWT user ID to the request's ID param covers only a small subset of cases; real authorization considers the user's policies and hierarchy (OWASP BOLA guidance)<sup>[[2]](#ref2)</sup>. Prefer not exposing identifiers at all: derive the object from the session/JWT where possible, or use per-user indirect references. Map to CWE-639 (Authorization Bypass Through User-Controlled Key)<sup>[[7]](#ref7)</sup>.
 
 3. **Scope every data-layer query to the principal and tenant.** Add `WHERE owner_id = :currentUser` (and `AND tenant_id = :currentTenant` in multi-tenant systems) at the persistence layer, not just in a controller `if`. This makes cross-user and cross-tenant IDOR structurally impossible for that query even if a check is forgotten upstream.
 
@@ -205,39 +228,64 @@ Ordered by effectiveness. The first three are the real fix; the rest are defense
 
    Also enforce the read direction (serialize DTOs, not raw models) to prevent Excessive Data Exposure.
 
-6. **Consistent enforcement across verbs, paths, formats, and static assets.** Apply the same authorization to every HTTP method; normalize and canonicalize paths before matching (mind case, suffix matching, trailing slashes, `%2e`, `;`-parameters); re-check at resolver/field level in GraphQL; minimize and lock down CORS (A01 explicitly lists permissive CORS as broken access control). Do not forget static resources and cloud object storage (S3/GCS/Azure buckets): incorporate them into the access-control policy, do not leave them public by default.
+6. **Consistent enforcement across verbs, paths, formats, and static assets.** Apply the same authorization to every HTTP method; normalize and canonicalize paths before matching (mind case, suffix matching, trailing slashes, `%2e`, `;`-parameters); re-check at resolver/field level in GraphQL; minimize and lock down CORS (A01<sup>[[8]](#ref8)</sup> explicitly lists permissive CORS as broken access control). Do not forget static resources and cloud object storage (S3/GCS/Azure buckets): incorporate them into the access-control policy, do not leave them public by default.
 
-7. **Least privilege, separation of duties, and step-up.** Grant the minimum roles/attributes; separate admin surfaces with independent authorization; require re-authentication or step-up for sensitive actions and after risk events. Prefer ABAC/ReBAC over pure RBAC for fine-grained, multi-tenant, object-level decisions (RBAC suffers role explosion and models ownership poorly; ReBAC, as in Google Zanzibar, natively expresses "owner of this object may edit it").
+### Defense in depth
 
-8. **Exit safely, log, alert, and rate-limit.** Fail closed on any authorization error (CWE-280), centralize failure handling, and never leak sensitive detail in the error. Log access-control failures and alert on repeated denials/enumeration (A01 and A09). Rate-limit object access to slow ID sweeping. Invalidate server-side sessions on logout; keep stateless JWTs short-lived or follow OAuth revocation.
+1. **Least privilege, separation of duties, and step-up.** Grant the minimum roles/attributes; separate admin surfaces with independent authorization; require re-authentication or step-up for sensitive actions and after risk events. Prefer ABAC/ReBAC over pure RBAC for fine-grained, multi-tenant, object-level decisions (RBAC suffers role explosion and models ownership poorly; ReBAC, as in Google Zanzibar, natively expresses "owner of this object may edit it").
 
-9. **Test authorization as first-class policy in CI.** Write unit and integration tests that assert deny-by-default, ownership enforcement, and role matrices, and fail the build when they fail. Reference OWASP ASVS V4 (Access Control), WSTG 4.5 (Authorization Testing), and Proactive Controls C7 (Enforce Access Controls). Do not deploy changes that break the authorization tests (OWASP BOLA guidance).
+2. **Exit safely, log, alert, and rate-limit.** Fail closed on any authorization error (CWE-280), centralize failure handling, and never leak sensitive detail in the error. Log access-control failures and alert on repeated denials/enumeration (A01<sup>[[8]](#ref8)</sup> and A09). Rate-limit object access to slow ID sweeping. Invalidate server-side sessions on logout; keep stateless JWTs short-lived or follow OAuth revocation.
 
-## Interview-grade nuances
+3. **Test authorization as first-class policy in CI.** Write unit and integration tests that assert deny-by-default, ownership enforcement, and role matrices, and fail the build when they fail. Reference OWASP ASVS V4 (Access Control), WSTG 4.5 (Authorization Testing), and Proactive Controls C7 (Enforce Access Controls). Do not deploy changes that break the authorization tests (OWASP BOLA guidance)<sup>[[2]](#ref2)</sup>.
 
-- **"We use UUIDs, so no IDOR."** Wrong answer. Unpredictability is not authorization; leaked or referenced GUIDs are exploited identically. OWASP recommends random GUIDs as a hardening measure, explicitly *in addition to* per-object checks, never instead of them.
-- **"We check the user is logged in."** Authentication is not authorization. Logged in does not mean permitted for *this* object or *this* function. The strongest candidates separate the three layers (authn, session, authz) crisply.
-- **BOLA vs BFLA is a real distinction, not pedantry.** BOLA: you are allowed to call the endpoint, the bug is object ownership (manipulate the ID). BFLA: you should not be able to call the function at all (an admin action reachable by a normal user). Fixes differ: object-scoped ownership checks vs function/role gating and admin controller inheritance.
-- **Comparing session-user-ID to the ID param feels like a fix but is not the general one.** It handles "is this my own record" but misses shared objects, delegated access, org hierarchies, and role-based object permissions. Real authorization consults a policy, not just equality.
-- **Vertical escalation is frequently a platform/routing bug, not app code.** URL-match discrepancies, verb tolerance, and override headers (`X-Original-URL`, `X-Rewrite-URL`, `X-HTTP-Method-Override`) bypass front-end gates while the app happily serves the action. Senior answer: normalize once, authorize in the app tier, do not rely on an edge WAF path rule.
-- **Mass assignment is an access-control bug wearing an input-binding costume.** Field-level validation of the fields you care about does nothing about the fields you did not declare; the framework writes them. It is BOPLA, and the 2012 GitHub incident is the canonical war story.
-- **Scanners cannot own this.** Broken access control is the most prevalent A01 category yet among the hardest to automate because it is policy-specific. The credible plan is two-account differential testing plus code review plus authorization tests in CI, not "run the DAST".
-- **The redirect-with-body trap.** A 302 to `/login` is not proof of enforcement; check whether the pre-redirect response already leaked the protected data.
-- **RBAC vs ABAC/ReBAC tradeoff.** RBAC is simple to start and easy to reason about at small scale, but role explosion, header-size limits from too many roles, and poor fit for object-level and multi-tenant decisions make ABAC/ReBAC the better default for anything nontrivial. Naming Zanzibar/ReBAC for "owner-of-object" semantics signals depth.
-- **403 vs 404 on authorization denial.** A 403 confirms the object exists but the caller is not permitted, which leaks existence and lets an attacker enumerate valid IDs (which invoice numbers are real, which usernames have accounts). A 404 for both nonexistent and unauthorized-but-existing objects removes that oracle at the cost of debuggability and honest error semantics. Pick per surface, not globally: for unauthenticated callers and cross-tenant boundaries return 404 uniformly and rate-limit repeated 404s, and for same-tenant peer denials a 403 is fine and clearer for audit. Never return 200 with an empty body, never 302-to-login with the object serialized in the pre-redirect payload, and match the response timing between the two branches so timing does not reintroduce the oracle.
-- **WebSocket, SSE, gRPC streaming, and MQTT authorize at handshake and then forget.** Long-lived streaming connections typically authenticate and authorize once at connect, then keep the socket open for minutes to hours while message-level authorization is skipped. A client can send subscribe or publish frames for other users' topics after connect (topic names like `user:456:notifications` are IDOR keys), roles or tokens revoked mid-session are still honored until the socket closes, and reconnection logic reuses stale tokens past expiry. Senior fix: authorize every inbound frame against the principal and the requested topic or object, bind the connection to a short-lived token and force reconnect on expiry or role change, and publish revocation events that server-side hooks consume to drop connections.
-- **OAuth scopes and API keys are coarse capability grants, not per-object authorization.** A common wrong answer is "the token has `invoices:read`, so we are authorized". Scopes gate which endpoints a client application may call on behalf of a user; they do not encode which specific objects that user owns. `invoices:read` plus `GET /invoices/{id}` still requires an ownership predicate binding the token's subject to the specific invoice. The same trap appears with machine-to-machine API keys ("the key has admin scope" says nothing about tenant), OAuth `client_credentials` tokens where the subject is the app rather than a user (ownership must be computed from a tenant claim), and impersonation or delegated-access tokens (record and enforce the acting user, not just the principal). Real authorization consumes scope AND principal AND resource in one policy decision.
+## Interviewer probes
+
+Mid: "We switched from sequential integer IDs to UUIDs on our object endpoints. Doesn't that close the IDOR risk?"
+
+Principal: No, unpredictability is not authorization. OWASP recommends random GUIDs as hardening in addition to per-object checks, never as a replacement for them. Other users' GUIDs leak constantly through messages, reviews, audit trails, JSON:API `included` relationships, email footers, and separate listing endpoints, and once a GUID leaks the object is accessed exactly like a sequential ID: the request still has no ownership check behind it. The fix is still `resource.owner == currentUser` at the point of access, not the shape of the identifier.
+
+Mid: "The endpoint checks that the caller is logged in and even compares the session's user ID to the ID in the request. Is that sufficient authorization?"
+
+Principal: It's necessary but not sufficient, and conflating the two is the most common tell of a weak answer. Authentication confirms who the user is; it says nothing about whether that user is permitted for this object or this function. Comparing the session-user-ID to the request's ID param covers the narrow "is this my own record" case, but it misses shared objects, delegated access, org hierarchies, and role-based object permissions. Real authorization consults a policy considering the user's roles and hierarchy, not a single equality check, which is exactly why ABAC/ReBAC rules are preferred over ad hoc ID comparisons.
+
+Mid: "What's the actual difference between BOLA and BFLA? Isn't that just API terminology for the same bug?"
+
+Principal: It's a real distinction with different fixes, not pedantry. BOLA is "wrong object, allowed function": the caller is legitimately allowed to hit the endpoint, but the bug is that ownership of the specific object was never checked, so manipulating the ID reaches someone else's data. BFLA is "wrong function entirely": the caller should never have reached the endpoint at all, regardless of which object they name, because it's an admin or privileged action reachable by a normal user. BOLA is fixed with object-scoped ownership checks; BFLA is fixed with function or role gating, like making admin controllers inherit from an abstract controller that enforces role checks so a new admin action can't ship unauthorized. Naming which one you found, and why the fix differs, signals depth.
+
+Mid: "You find an admin action reachable by a regular user. Whose bug is that, the application's or the platform's?"
+
+Principal: Often it's a platform or routing bug wearing an application-security costume. URL-matching and path-normalization discrepancies (case sensitivity, trailing slashes, `%2e`, `;`-parameters) let a gateway or WAF believe a request maps to a safe path while the application router resolves it to the admin route underneath, and override headers like `X-Original-URL`, `X-Rewrite-URL`, and `X-HTTP-Method-Override` let an attacker bypass a front-end rule that only matched one method and path. The senior answer is to normalize the path once and authorize in the application tier itself, rather than trusting an edge WAF rule that a routing quirk can slip past.
+
+Mid: "Mass assignment sounds like an input-validation bug, sending fields the API wasn't expecting. Why do you file it under broken access control?"
+
+Principal: Because field-level validation of the fields you declared does nothing about the fields you didn't, and the ORM writes them anyway if the controller binds straight to the persistence model. Sending `isAdmin`, `role`, or `balance` in the request body isn't malformed input, it's a well-formed request for a property the UI never exposed, and the framework happily sets it. That's an access-control failure at the property level (BOPLA), not an input-shape problem, which is why the fix is an allowlist DTO, never binding directly to the domain model, rather than a smarter validator. The 2012 GitHub incident, where a user added their own public key to an arbitrary organization via mass assignment and gained commit access to its repositories, is the canonical case for why this is a privilege-escalation bug, not a hygiene nitpick.
+
+Mid: "When a user tries to access an object they're not authorized for, should the server return 403 or 404?"
+
+Principal: It depends on what you're protecting against, and picking one globally is the wrong answer. A 403 confirms the object exists but the caller isn't permitted, which is honest and good for audit logs, but it's also an oracle: an attacker can enumerate which IDs are real by watching for 403 versus 404. A 404 for both nonexistent and unauthorized-but-existing objects removes that oracle at the cost of debuggability. The senior split is per surface: unauthenticated callers and cross-tenant boundaries get a uniform 404 with rate-limiting on repeated 404s, while same-tenant peer denials can safely use 403. What you must never do is return 200 with an empty body or a 302-to-login with the object already serialized in the pre-redirect response, and response timing has to match between the two branches or the timing itself becomes the oracle.
+
+Mid: "Your app authenticates and authorizes the WebSocket handshake before upgrading the connection. Are you done?"
+
+Principal: No, that only covers the connection's opening moment. Long-lived streaming connections, WebSocket, SSE, gRPC streaming, MQTT, typically authorize once at connect and then keep the socket open for minutes or hours while message-level authorization is skipped entirely. A client can send subscribe or publish frames for other users' topics after connect, since topic names like `user:456:notifications` are IDOR keys in their own right, and a role or token revoked mid-session is still honored until the socket happens to close. The fix is to authorize every inbound frame against the principal and the requested topic, bind the connection to a short-lived token that forces reconnect on expiry or role change, and have server-side hooks consume revocation events to drop live connections.
+
+Mid: "The request carries a valid OAuth token with an `invoices:read` scope, and it's hitting `GET /invoices/{id}`. Is that enough to authorize the read?"
+
+Principal: No, and treating scope as authorization is a common wrong answer. Scopes are coarse capability grants: they gate which endpoints a client application is allowed to call on a user's behalf, but they say nothing about which specific objects that user owns. `invoices:read` still needs an ownership predicate binding the token's subject to that specific invoice ID, the same gap machine-to-machine API keys have ("the key has admin scope" says nothing about tenant) and delegated or impersonation tokens have (you must record and enforce the acting user, not just the principal). Real authorization consumes scope, principal, and resource together in one policy decision, not scope alone.
 
 ## Sources
 
-- OWASP Top 10 A01:2021 Broken Access Control: https://owasp.org/Top10/2021/A01_2021-Broken_Access_Control/
-- OWASP API Security Top 10 (2023): https://owasp.org/API-Security/editions/2023/en/0x11-t10/
-- OWASP API1:2023 Broken Object Level Authorization (BOLA): https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
-- OWASP API5:2023 Broken Function Level Authorization (BFLA): https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/
-- OWASP Authorization Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
-- OWASP Mass Assignment Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html
-- PortSwigger Web Security Academy, Access control vulnerabilities and privilege escalation: https://portswigger.net/web-security/access-control
-- PortSwigger Web Security Academy, Insecure direct object references (IDOR): https://portswigger.net/web-security/access-control/idor
-- CWE-639 Authorization Bypass Through User-Controlled Key: https://cwe.mitre.org/data/definitions/639.html
-- CWE-285 Improper Authorization: https://cwe.mitre.org/data/definitions/285.html
-- GitHub public key security vulnerability (2012 mass assignment): https://blog.github.com/2012-03-04-public-key-security-vulnerability-and-mitigation/
+<a id="ref1"></a>[1] PortSwigger Web Security Academy, "Access control vulnerabilities and privilege escalation". Retrieved 2026. https://portswigger.net/web-security/access-control
+
+<a id="ref2"></a>[2] OWASP, "API1:2023 Broken Object Level Authorization (BOLA)". OWASP API Security Top 10. Retrieved 2026. https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
+
+<a id="ref3"></a>[3] OWASP, "API5:2023 Broken Function Level Authorization (BFLA)". OWASP API Security Top 10. Retrieved 2026. https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/
+
+<a id="ref4"></a>[4] OWASP, "Mass Assignment Cheat Sheet". OWASP Cheat Sheet Series. Retrieved 2026. https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html
+
+<a id="ref5"></a>[5] GitHub, "Public Key Security Vulnerability and Mitigation" (2012 mass assignment incident). GitHub Blog. 2012-03-04. https://blog.github.com/2012-03-04-public-key-security-vulnerability-and-mitigation/
+
+<a id="ref6"></a>[6] OWASP, "Authorization Cheat Sheet". OWASP Cheat Sheet Series. Retrieved 2026. https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+
+<a id="ref7"></a>[7] MITRE, "CWE-639: Authorization Bypass Through User-Controlled Key". MITRE CWE. Retrieved 2026. https://cwe.mitre.org/data/definitions/639.html
+
+<a id="ref8"></a>[8] OWASP, "A01:2021 Broken Access Control". OWASP Top 10. Retrieved 2026. https://owasp.org/Top10/2021/A01_2021-Broken_Access_Control/

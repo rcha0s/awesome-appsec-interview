@@ -2,6 +2,8 @@
 
 > WebAuthn's phishing resistance is not magic, it is a signature over a `clientDataJSON` blob that pins the browser origin to a credential scoped by RP ID. The authenticator private key never leaves silicon (TPM, Secure Enclave, StrongBox, or hardware key), and the browser refuses to invoke a credential whose stored RP ID does not match `eTLD+1` of the current page. Passkeys are the same credentials with the private key exportable into a sync fabric (iCloud Keychain, Google Password Manager, 1Password), which shifts the trust anchor from a device to a cloud account. Every real-world break comes from a relying party that skipped one of four checks: origin string, RP ID, challenge freshness, or signature counter. If the RP verifies all four and rejects unknown attestation on registration when it cares, phishing (including AiTM proxies like Evilginx) fails because the attacker's origin will not match the signed origin. If the RP verifies three of four, the ceremony still authenticates, but a determined attacker with a stolen or cloned credential slips through unnoticed.
 
+**Interview frequency:** Common
+
 ## Quick reference
 
 ```json

@@ -2,6 +2,8 @@
 
 > The system prompt is a soft configuration string that shares a single token stream with attacker input, not a secret container. Alignment training biases the model against reproducing that string, it does not enforce a boundary. Every extraction technique below exploits the same underlying property, any refusal is sampled from the same distribution the attacker is perturbing. The correct engineering response is to treat the system prompt as public, keep credentials in an execution layer the model never sees, push tool authorization into deterministic code, and rely on prompt confidentiality only as defense in depth. Teams that instead invest in stronger "do not reveal" instructions are enforcing a boundary in the wrong layer, the LLM equivalent of storing a DB password in a JavaScript comment and asking users politely not to view source.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

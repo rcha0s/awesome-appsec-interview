@@ -2,6 +2,8 @@
 
 > Schema validation on a tool call answers one question: is the payload the right shape for `json.loads` and static typing to keep working. It does not answer whether `"filename": "a.txt\"; rm -rf /"` is safe to hand to `/bin/sh`. The schema block sits right next to the handler and looks like a validator, but the schema is a parser and the handler is the security boundary. If the handler shells out, opens a URL, opens a file by name, or builds SQL, the tool argument reaches the same sink as a raw HTTP body, so the classical web-app payload set (command injection, SSRF, path traversal, SQLi, header injection) becomes reachable through model output. An LLM that emits tool JSON is now an untrusted client for the sink, not a co-worker inside the trust boundary. The root cause every team gets wrong first: `type: string` constrains lexical form, not semantic class, so schema-valid does not mean sink-safe.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```json

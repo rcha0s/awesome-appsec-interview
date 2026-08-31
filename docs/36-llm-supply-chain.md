@@ -2,6 +2,8 @@
 
 > The invariant that fails first is almost always "deserialization is data-only." A `.bin` or `.pt` file is a serialized Python object graph, and unpickling it means running `__reduce__` methods the attacker wrote. Second in line is provenance: Hugging Face is a mutable registry, `from_pretrained("org/model")` resolves the tag `main` at pull time, and there is no signature check unless the caller opts in. The third failure surface is semantic and does not need any RCE: the tokenizer, the training corpus, or a LoRA adapter is quietly modified so that a specific trigger causes a specific misbehavior at inference, and the model still passes every benchmark you would think to run. Every artifact type in the pipeline (weights, tokenizer, dataset, adapter, prompt template) is a supply-chain link, and the loader treats them all as trusted by default. The mitigation is boring and correct: pin by commit SHA, load via `safetensors` or `weights_only=True`, verify signatures, and treat data provenance as a first-class release artifact.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```python

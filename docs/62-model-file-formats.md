@@ -2,6 +2,8 @@
 
 > Model file formats sit on a spectrum from Turing-complete-by-design to strictly data-only, and the format itself is the first control. Pickle is a stack VM whose `REDUCE` opcode calls attacker-named functions with attacker-supplied arguments, so any `.pkl`, `.pt`, `.bin`, or joblib artifact from an untrusted source must be treated as an executable. Safetensors was authored specifically to break that class: its parser is a length-prefixed JSON header plus raw byte slices with no callable invocation anywhere in the code path. GGUF and ONNX sit in the middle, where bytes are inert but header parsing bugs and, for ONNX, custom-operator registration still give an attacker code execution or DoS surface. The root cause of every RCE in this family is that the loader is willing to resolve a name to a callable and invoke it during deserialization. Principal-level answers treat "which format" as the first control, not "which scanner".
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```

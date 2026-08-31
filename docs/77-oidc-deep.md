@@ -2,6 +2,8 @@
 
 > OIDC is an identity layer bolted on top of OAuth 2.0 that adds one artifact and one contract: the `id_token`, a signed JWT the IdP issues to the RP asserting who authenticated and against which client, and the rule that the RP validates that assertion before treating the user as logged in. The whole spec is a chain of hashes and nonces designed to bind an id_token to one browser session, one code, one access token, and one client, so an id_token stolen from another flow cannot be spliced in. Every real-world OIDC break traces back to breaking one link of that chain: skipping signature verification, dropping the `aud` check, ignoring `nonce`, allowing algorithm downgrade to `none` or HS256, or accepting an id_token from a co-tenant issuer. The umbrella flow, PKCE, and state live in [14-oauth-oidc.md](./14-oauth-oidc.md); JWT signature and header attacks in [13-jwt-token-security.md](./13-jwt-token-security.md); this file is the identity-layer surface, discovery, hashes, logout, and JAR/PAR/CIBA/FAPI hardening.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

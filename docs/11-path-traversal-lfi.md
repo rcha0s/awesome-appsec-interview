@@ -2,6 +2,8 @@
 
 > The application takes attacker-influenced input and uses it to build a filesystem path (or an include target) without first canonicalizing that path and confining it to an intended directory. Because `../` means "go up one level" to the operating system, an unconfined path escapes the base directory and names arbitrary files. The three severities are one spectrum: path traversal reads (or writes) a file, Local File Inclusion (LFI) additionally executes the included file's contents in the app runtime, and Remote File Inclusion (RFI) executes a file fetched from a URL the attacker controls. Root cause is always the same: trusting input to name a path, and failing to canonicalize then confine before the filesystem call. This is CWE-22.
 
+**Interview frequency:** Common
+
 ## How it works
 
 A vulnerable handler concatenates a base directory with a request value and hands the result to a filesystem API:
@@ -29,6 +31,24 @@ Three distinct sinks, escalating in impact:
 - Remote include sink (RFI): the include target may be a URL, so the server fetches and executes attacker-hosted code. Instant RCE where present.
 
 One parsing subtlety that enables encoding bypasses: web containers perform one layer of percent-decoding on values from the URL and forms before the application sees them. If the application then decodes again, or if the container decodes a sequence the application's filter did not expect, encoded traversal slips through the gap between the check and the filesystem call.
+
+## Quick reference
+
+```
+GET /loadImage?filename=../../../etc/passwd
+# Each ../ climbs one directory; three of them walk the read from
+# /var/www/images/ up to the filesystem root, so the handler opens
+# /etc/passwd instead of the image it was meant to serve.
+```
+
+| Invariant | Where enforced | How violated | Source |
+|---|---|---|---|
+| No user-controlled string reaches a filesystem/include call directly; an indirect identifier maps to a server-known path | Route handler / path-resolution layer | Basic traversal (`?filename=../../../etc/passwd`) or an absolute path (`?filename=/etc/passwd`) flows straight into `open`/`include` | <sup>[[1]](#ref1)</sup> |
+| The resolved, canonical (symlink-resolved) path still lives under the authorized base directory | Canonicalize-then-confine check, run before the filesystem call | A naive prefix check on a lexically-normalized (not canonical) path, or one missing a trailing separator, lets `../` or a sibling-directory string slip through | <sup>[[2]](#ref2)</sup> |
+| Path validation runs against the fully decoded, canonical string, never a single-pass-decoded or blacklist-stripped one | Input-validation / allowlist layer, applied after all decode passes | Double URL-encoding, overlong UTF-8, and non-recursive stripping (`....//`) reconstitute `../` after the filter already ran | <sup>[[1]](#ref1)</sup> |
+| Remote and dynamic inclusion features are disabled; the include target is never a URL or attacker-suppliable content | Interpreter config (`allow_url_include=Off`, `allow_url_fopen=Off`) plus no dynamic `include` on user input | RFI fetches and executes attacker-hosted code; `php://input`/`data://` make the "included file" attacker-controlled bytes | <sup>[[1]](#ref1)</sup> |
+| Canonicalization and the open/include syscall happen atomically with respect to the confinement check | Atomic resolve-and-open primitive (`openat2` with `RESOLVE_BENEATH`) | `realpath()` followed by a separate reopen-by-string leaves a TOCTOU window for an attacker to swap a path component for a symlink | <sup>[[2]](#ref2)</sup> |
+| Archive-extraction entry paths are canonicalized and confined to the destination directory before any file is written | Archive-extraction routine (Zip Slip fix) | A malicious zip/tar entry name (`../../../../etc/cron.d/pwn`) escapes `destDir` when the extractor writes without canonicalizing first | <sup>[[2]](#ref2)</sup> |
 
 ## Attack techniques
 
@@ -96,7 +116,7 @@ Why these work: each exploits a mismatch between the layer that validates (strin
 
 Reading files is medium impact; interviewers want the path to code execution. These are PHP-centric because PHP `include`/`require` execute whatever they read.
 
-Vulnerable pattern (from the OWASP write-up, via Wikipedia):
+Vulnerable pattern (from the OWASP write-up, via Wikipedia)<sup>[[1]](#ref1)</sup>:
 
 ```php
 <?php
@@ -153,7 +173,7 @@ Why it works: with PHP `allow_url_include=On`, `include($_GET['page'])` fetches 
 
 The same traversal bug moves from URL parameters to the entries inside a user-supplied archive. A malicious zip, tar, jar, or war contains entries whose stored names are traversal payloads such as `../../../../etc/cron.d/pwn` or `..\..\Windows\Temp\shell.exe`. A naive extractor iterates entries and writes each one with something like `new File(destDir, entry.getName())` or the Python equivalent `open(os.path.join(dest, name), 'wb')`, then discovers, when it hands that path to the OS, that the entry name escaped the destination directory. The write lands wherever the entry points: cron directories, systemd unit paths, `.ssh/authorized_keys`, or a location the app itself will later load and execute.
 
-Root cause is CWE-22 applied to the entry name rather than a request parameter. Because the sink is a write, not a read, impact escalates directly to code execution on any target where the attacker can pick the destination. The Snyk disclosure in 2018 catalogued this exact bug across Spring, Apache Ant, JBoss, Plexus, and dozens of other libraries whose zip and tar utilities did not canonicalize each entry before opening the output stream; several language ecosystems shipped Zip Slip fixes to their standard libraries in response.
+Root cause is CWE-22<sup>[[2]](#ref2)</sup> applied to the entry name rather than a request parameter. Because the sink is a write, not a read, impact escalates directly to code execution on any target where the attacker can pick the destination. The Snyk disclosure in 2018 catalogued this exact bug across Spring, Apache Ant, JBoss, Plexus, and dozens of other libraries whose zip and tar utilities did not canonicalize each entry before opening the output stream; several language ecosystems shipped Zip Slip fixes to their standard libraries in response.
 
 Defense is canonicalize-then-confine applied to each resolved entry path before the extractor calls `open`: resolve `destDir` and the target to their real absolute forms, verify the target starts with `destDir + separator`, and only then create the output file. Reject entries whose names are absolute paths (`/etc/...`, `C:\...`), whose names contain `..` components after normalization, and reject symlink entries entirely unless the extractor has specifically thought about how those interact with the confinement check. This is the same invariant as the URL case; the surface just shifted to entry metadata.
 
@@ -183,13 +203,13 @@ The fix is to apply canonicalize-then-confine at every sink regardless of the st
 
 ### 11. Detection and blind confirmation
 
-Find file operations whose path derives from request data: `open`/`read`/`include`/`require`/`fopen`/`sendfile`/`File(...)`/`readFile`/template loaders/zip extractors. Probe with encoded traversal, absolute paths, and wrapper schemes. Determine whether the target is a read sink (output returned) or an include sink (content executed) by including something that would error if executed vs merely printed. Blind cases: use timing (include a large/blocking pseudo-file) or verbose error messages, which OWASP notes make it much easier to guess correct paths by leaking the base directory in stack traces.
+Find file operations whose path derives from request data: `open`/`read`/`include`/`require`/`fopen`/`sendfile`/`File(...)`/`readFile`/template loaders/zip extractors. Probe with encoded traversal, absolute paths, and wrapper schemes. Determine whether the target is a read sink (output returned) or an include sink (content executed) by including something that would error if executed vs merely printed. Blind cases: use timing (include a large/blocking pseudo-file) or verbose error messages, which OWASP notes<sup>[[3]](#ref3)</sup> make it much easier to guess correct paths by leaking the base directory in stack traces.
 
 ## Defense
 
-Ordered by effectiveness. The reliable fix removes user control of the path or confines it after canonicalization; string filtering is the weakest layer.
+### Real fix
 
-1. Do not pass user input to filesystem APIs at all. Reference files by an indirect identifier: map an opaque ID or an enum value to a known server-side path (`id=5 => "reports/czech.pdf"`), never accept a filename or path from the request. This eliminates the class of bug. OWASP's phrasing: use indexes rather than actual portions of file names.
+1. Do not pass user input to filesystem APIs at all. Reference files by an indirect identifier: map an opaque ID or an enum value to a known server-side path (`id=5 => "reports/czech.pdf"`), never accept a filename or path from the request. This eliminates the class of bug. OWASP's phrasing<sup>[[1]](#ref1)</sup>: use indexes rather than actual portions of file names.
 2. Canonicalize, then confine. Resolve the path to its absolute real form, then verify it still lives under the intended base directory after resolution (this defeats `../` and symlink escapes). Normalize first, check second.
 
 ```java
@@ -207,29 +227,49 @@ if target == base or target.startswith(base + os.sep):
     ...   # confined
 ```
 
-3. Strict allowlist for the varying part: permit only known filenames, or validate against `^[A-Za-z0-9_-]+$` and reject path separators, dots, and any encoded forms. OWASP: accept known-good, do not try to sanitize (blacklisting/stripping is bypassable).
+3. Strict allowlist for the varying part: permit only known filenames, or validate against `^[A-Za-z0-9_-]+$` and reject path separators, dots, and any encoded forms. OWASP<sup>[[1]](#ref1)</sup>: accept known-good, do not try to sanitize (blacklisting/stripping is bypassable).
 4. Disable dangerous inclusion features: PHP `allow_url_include=Off` and `allow_url_fopen=Off` (kills RFI and remote wrappers), and avoid dynamic `include` on user input entirely. Ensure you understand how the OS will interpret the filename you hand it.
-5. Least privilege and isolation: run the app as a low-privilege user, use a chroot jail / container / mount namespace so even a successful traversal reaches little, and keep secrets and configuration outside the web root. On Windows IIS, keep the web root off the system disk to prevent recursive traversal into system directories.
-6. Harden logging and session paths so poisoning-to-LFI is infeasible: separate the include surface from writable, attacker-influenced files.
-7. Close the TOCTOU race between canonicalize and open. The invariant is that resolution and open happen atomically with respect to the confinement check, because `canonicalize -> check prefix -> open` is a race: between the check and the syscall, an attacker with any write primitive inside the base directory (uploads, temp files, a shared extraction dir) can swap a component for a symlink pointing outside, so the check passes on the old inode and the open follows the new symlink. On Linux the correct primitive is `openat2()` with `RESOLVE_BENEATH` (or `RESOLVE_IN_ROOT`), which asks the kernel to refuse any resolution that escapes the base directory, including through symlinks, bind mounts, and magic links, as part of the open itself. Where `openat2` is unavailable, use `openat` with `O_NOFOLLOW` on each path component, or resolve into a `chroot`/mount namespace so escapes are structurally impossible. The common wrong implementation is to canonicalize with `realpath()` and then reopen by the same string, which is exactly the TOCTOU window the attacker needs.
+5. Close the TOCTOU race between canonicalize and open. The invariant is that resolution and open happen atomically with respect to the confinement check, because `canonicalize -> check prefix -> open` is a race: between the check and the syscall, an attacker with any write primitive inside the base directory (uploads, temp files, a shared extraction dir) can swap a component for a symlink pointing outside, so the check passes on the old inode and the open follows the new symlink. On Linux the correct primitive is `openat2()` with `RESOLVE_BENEATH` (or `RESOLVE_IN_ROOT`), which asks the kernel to refuse any resolution that escapes the base directory, including through symlinks, bind mounts, and magic links, as part of the open itself. Where `openat2` is unavailable, use `openat` with `O_NOFOLLOW` on each path component, or resolve into a `chroot`/mount namespace so escapes are structurally impossible. The common wrong implementation is to canonicalize with `realpath()` and then reopen by the same string, which is exactly the TOCTOU window the attacker needs.
 
-## Interview-grade nuances
+### Defense in depth
 
-- "We strip `../`" is the classic wrong answer. Non-recursive stripping (`....//`), single vs double URL-encoding, overlong UTF-8 (`%c0%af`), and absolute paths all defeat it. Filtering treats a resolution problem as a string problem.
-- Canonicalize-then-confine is the correct fix, and the order matters: normalize to the real absolute path first, then check the prefix. Checking the raw input before normalization is defeated by encoding and by `../`.
-- The `getCanonicalPath().startsWith(BASE)` pattern has a real pitfall: if `BASE` lacks a trailing separator, a sibling directory sharing the prefix (for example base `/var/www/images` and target `/var/www/images_public/../../etc/passwd` resolving to a path that still starts with the string `/var/www/images`) can pass the check. Append the separator (`BASE + File.separator`) or compare canonical parents. Symlinks are why you must resolve to the real path, not just lexically normalize.
-- Node.js has the same trap, dressed up in different APIs. `path.join(base, userInput)` only normalizes; it does not confine. If `userInput` is absolute (`/etc/passwd` on Linux, `C:\...` on Windows) the join semantics discard `base` entirely on some code paths, and even without that, `../../../etc/passwd` normalizes cleanly to a path outside `base`. The correct pattern is `const resolved = path.resolve(base, userInput); if (!resolved.startsWith(base + path.sep)) reject();`, with the sibling-prefix caveat above (`/var/www/images` versus `/var/www/images_public`). Most Node LFIs came from `path.join` being read as "sanitize"; it is normalization, not confinement.
-- The web container decodes one percent layer before the app sees input, which is exactly why double-encoding (`%252e`) and non-standard encodings bypass filters that run on the already-once-decoded string. Naming this decode boundary signals depth.
-- Null-byte truncation (`%00`) is a legacy technique: it worked because C strings terminate at NUL while the language kept the full string, but it was fixed in PHP 5.3.4 and does not work on modern runtimes. Citing it as still-universal is a junior tell; cite it as historical and pivot to wrappers/truncation.
-- Traversal is not "just file read." LFI escalates to RCE through logs, session files, `/proc`, wrappers (`php://input`, `data://`, `expect://`, `phar://`), and upload-plus-include. Staff-level answers state the escalation path, not just `/etc/passwd`.
-- `php://filter` is a read-only wrapper yet high impact: it exfiltrates source and secrets from a pure read primitive, and modern filter-chain conversions upgrade the same read primitive to full RCE against any `include` sink, so "it can only read files" understates the risk.
-- RFI is largely historical on PHP because `allow_url_include` defaults to Off, but the same knob gates remote stream wrappers, and non-PHP dynamic-include mechanisms can still fetch remote code. Do not assume RFI is dead; verify the config.
-- Platform confinement differs: Linux traversal reaches the whole disk; Windows confines you to the web root's partition, and Windows tolerates trailing `. \ /` characters that can bypass some suffix checks.
-- Indirect object reference (map IDs to paths) is strictly better than any validation, because it removes user control of the path rather than trying to sanitize it, the same philosophy as parameterized queries for SQL injection.
+1. Least privilege and isolation: run the app as a low-privilege user, use a chroot jail / container / mount namespace so even a successful traversal reaches little, and keep secrets and configuration outside the web root. On Windows IIS, keep the web root off the system disk to prevent recursive traversal into system directories.
+2. Harden logging and session paths so poisoning-to-LFI is infeasible: separate the include surface from writable, attacker-influenced files.
+
+## Interviewer probes
+
+Mid: "The filter strips `../` from the filename parameter before using it. Is that sufficient?"
+
+Principal: No, stripping is a string operation applied to a resolution problem. Non-recursive stripping is defeated by `....//`, which becomes `../` once the inner sequence is removed; single versus double URL-encoding (`%2e%2e%2f` vs `%252e%252e%252f`) and overlong UTF-8 sequences like `%c0%af` bypass filters written against the literal string; and an absolute path bypasses it entirely if the base directory isn't actually enforced. The fix isn't a better filter, it's canonicalizing to the real absolute path and confining after resolution, not before.
+
+Mid: "You've implemented `file.getCanonicalPath().startsWith(BASE_DIRECTORY)` as the confinement check in Java. Good enough?"
+
+Principal: There's a real pitfall in that exact pattern. If `BASE_DIRECTORY` doesn't end in a separator, a sibling directory that shares the same string prefix, `/var/www/images` versus `/var/www/images_public`, can pass the `startsWith` check without actually being inside the intended directory. You have to append the separator before comparing, or compare canonical parent directories directly. And it has to be the canonical (real, symlink-resolved) path being checked, not just a lexically normalized one, or a symlink inside the base directory defeats the whole check.
+
+Mid: "The Node.js code uses `path.join(base, userInput)` before opening the file. Does that confine the path?"
+
+Principal: No, and that's a very common misreading. `path.join` normalizes a path, it does not confine it to `base`. If `userInput` is itself absolute, the join semantics can discard `base` entirely on some platforms, and even for a relative traversal like `../../../etc/passwd`, `path.join` will happily normalize it to a clean path that's still outside `base`. The correct pattern is `path.resolve(base, userInput)` followed by an explicit check that the result starts with `base + path.sep`. Most real Node LFIs trace back to `path.join` being treated as a sanitizer when it's just normalization.
+
+Mid: "Why does something like `%252e%252e%252f` bypass a filter that already blocks `%2e%2e%2f`?"
+
+Principal: Because of where decoding happens relative to where the filter runs. The web container performs one layer of percent-decoding on the URL before the application ever sees the value. A filter written against that once-decoded string catches `%2e%2e%2f` because it decodes to `../` on that first pass, but `%252e%252e%252f` only decodes to `../` after a second decode, which happens later at whatever layer re-decodes the string, often the filesystem call itself. The filter and the resolution layer are looking at different numbers of decode passes, and that gap is the bug.
+
+Mid: "I've seen null-byte truncation, `filename=../../../etc/passwd%00.jpg`, cited as a way to defeat a forced file extension. Is that still a real technique?"
+
+Principal: It's historical, not current. It worked because C strings terminate at a NUL byte while the higher-level language kept the full string including the appended extension, so the OS open call saw a path ending at `/etc/passwd` while the application's own logic still thought the filename ended in `.jpg`. That was fixed in PHP 5.3.4 and doesn't work on modern runtimes. Citing it as a live technique today is a tell that the knowledge is outdated; the live equivalents are stream wrappers and other extension-suffix tricks, not null-byte truncation.
+
+Mid: "You've confirmed you can read `/etc/passwd` through the traversal. What's the actual severity here?"
+
+Principal: Reading one file is the floor, not the ceiling, and the escalation path is what a staff-level answer states explicitly. In PHP specifically, traversal into an `include`/`require` sink executes whatever's read, so the same bug reaches RCE through log poisoning (writing PHP into a request header the server logs, then including the log), session-file poisoning, or PHP stream wrappers like `php://input` and `data://` that make the "included file" attacker-supplied content outright. Stopping the writeup at "can read `/etc/passwd`" understates the bug if there's any include sink reachable.
+
+Mid: "The read primitive here only reaches `php://filter`, which is documented as read-only. Does that cap the impact at information disclosure?"
+
+Principal: Not necessarily. `php://filter` alone already exfiltrates source code and secrets, which is serious, but the filter-chain technique goes further: by chaining a sequence of `convert.iconv.*` conversions, the read primitive can be made to synthesize arbitrary attacker-chosen PHP bytes from any readable file's contents. Fed into an `include` sink, that's full RCE from a wrapper that's read-only by design, no writable log or session file required. "It can only read files" is exactly the assumption that technique breaks.
 
 ## Sources
 
-- PortSwigger Web Security Academy, Path traversal: https://portswigger.net/web-security/file-path-traversal
-- OWASP Community, Path Traversal (encoding variations, null byte, absolute path, RFI, prevention): https://owasp.org/www-community/attacks/Path_Traversal
-- MITRE CWE-22, Improper Limitation of a Pathname to a Restricted Directory: https://cwe.mitre.org/data/definitions/22.html
-- OWASP WSTG, Testing for Directory Traversal / File Include: https://github.com/OWASP/wstg/blob/master/document/4-Web_Application_Security_Testing/05-Authorization_Testing/01-Testing_Directory_Traversal_File_Include.md
+<a id="ref1"></a>[1] OWASP Community, "Path Traversal" (encoding variations, null byte, absolute path, RFI, prevention). OWASP. Retrieved 2026. https://owasp.org/www-community/attacks/Path_Traversal
+
+<a id="ref2"></a>[2] MITRE, "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')". MITRE CWE. Retrieved 2026. https://cwe.mitre.org/data/definitions/22.html
+
+<a id="ref3"></a>[3] OWASP, "WSTG - Testing for Directory Traversal / File Include". OWASP Web Security Testing Guide. Retrieved 2026. https://github.com/OWASP/wstg/blob/master/document/4-Web_Application_Security_Testing/05-Authorization_Testing/01-Testing_Directory_Traversal_File_Include.md

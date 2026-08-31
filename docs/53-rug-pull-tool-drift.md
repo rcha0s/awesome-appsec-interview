@@ -2,6 +2,8 @@
 
 > The vulnerability is not in the tool, it is in the approval record. MCP clients today typically store "user consented to server X exposing tool Y" and never fingerprint what Y actually was at the moment consent was given. The server is free to serve one manifest during onboarding, a mutated manifest after the trust badge is granted, and different manifests to different clients or on different days. The description string is not decoration, it lands verbatim in the model's context window and is executed as instructions. Every field that reaches the model (`description`, `title`, `inputSchema.description`, annotation hints, resource contents referenced by the tool) is part of the payload surface, and every one of them is a mutable string the server controls. The class is supply-chain integrity of the metadata plane, not prompt-injection content filtering.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 Initial `tools/list` response the user approves during onboarding:

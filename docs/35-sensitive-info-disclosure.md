@@ -2,6 +2,8 @@
 
 > A model is a lossy compressor of its training corpus, and lossy compression preserves rare, high-perplexity strings disproportionately well. Secrets, PII, and boilerplate legal notices sit exactly where compression retains the most, because they occur in low-entropy contexts (the same key appears with the same surrounding tokens across many scraped pages). Sensitive information disclosure is the class of attacks that force the decoder to emit those memorized strings, or that recovers them from adjacent artifacts: embeddings, KV caches, logprobs, retrieval indices, fine-tune snapshots. The perimeter is not the endpoint; it is every place a bit of training or context data can be reconstructed from a downstream signal. Treating the model, the vector DB, the prefix cache, and the FT job as one shared-fate blast radius is the only defensible posture.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

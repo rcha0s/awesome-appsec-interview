@@ -2,6 +2,8 @@
 
 > Passwords survive the passkey migration because half the world's login surface is still browsers hitting legacy IdPs, mobile apps without WebAuthn UX, and machine accounts. The root failure mode is unchanged since 2012: users pick weak strings, reuse them across sites, and servers store them with algorithms that GPUs eat in microseconds. Modern password auth is three interlocking invariants held constant under adversarial pressure: (1) the stored verifier is a memory-hard KDF output (Argon2id at OWASP 2024 params) with per-user salt and server-side pepper, (2) the login endpoint returns identical response bytes and identical wall-clock latency for every failure class so username enumeration and timing oracles die at the door, and (3) online guessing is throttled by per-IP and per-account rate limits plus breach-list rejection at set-time so credential stuffing against a multi-billion-credential corpus has nowhere to land. If any one of those breaks, the other two do not save you.
 
+**Interview frequency:** Common
+
 ## Quick reference
 
 ```

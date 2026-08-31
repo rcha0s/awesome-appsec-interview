@@ -2,6 +2,8 @@
 
 > The security frontier for agents is not "make the model refuse harmful text." It is a capability boundary: the model proposes actions, but only a verified, schema-validated, policy-checked tool broker executes them. The root cause of nearly every agent compromise is that model output was trusted as an authorised instruction, or tool output was trusted as user intent, instead of both being treated as untrusted data crossing a deterministic boundary. Every defense in this doc pushes the enforcement point off the LLM and onto deterministic infrastructure. Prompt-injection classifiers, safety fine-tunes, and system-prompt hardening are probabilistic; they belong in a defense-in-depth layer, never as the sole control. The principal-level frame: treat model output as untrusted input to the tool layer, and treat tool output as untrusted input to the model.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```json
@@ -88,10 +90,6 @@ sandbox:
   memory_mb: 256
   fs: readonly
 ```
-
-### Spec and framework anchors
-
-The frame draws on OWASP Top 10 for LLM Applications, 2025 edition (LLM01 Prompt Injection, LLM02 Sensitive Information Disclosure, LLM03 Supply Chain, LLM04 Data and Model Poisoning, LLM05 Improper Output Handling, LLM06 Excessive Agency, LLM07 System Prompt Leakage, LLM08 Vector and Embedding Weaknesses, LLM10 Unbounded Consumption), NIST AI RMF 1.0 (January 2023) plus the Generative AI Profile NIST AI 600-1 (July 2024) with control anchors GV-1.3, MP-2.3, MS-2.6, MG-2.2, the MITRE ATLAS matrix (AML.T0051 direct/indirect LLM prompt injection, AML.T0054 LLM jailbreak, AML.T0025 exfiltration via cyber means), the Model Context Protocol specification (revision 2025-06-18) `initialize` and capability negotiation clauses, and the OpenTelemetry Semantic Conventions for Generative AI `gen_ai.*` attribute set.
 
 ## Attack techniques
 

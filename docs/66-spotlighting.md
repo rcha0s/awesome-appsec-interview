@@ -2,6 +2,8 @@
 
 > Spotlighting does exactly one thing: it changes the surface form of untrusted text so the model can tell it apart from the app's own instructions, then it prompts (and hopes) the model to treat that marked span as data. The paper's contribution is that this simple transformation, paired with a system-prompt directive, drops indirect-prompt-injection success rate substantially on GPT-3.5 and GPT-4 across the paper's benchmark splits. It is a prompt-shape defense, not a semantic one; the model's willingness to refuse is still a learned behavior on the base weights. Spotlighting binds no principal, checks no capability, and does not gate a single tool call. It is the cheapest mitigation you can deploy on a RAG or web-browsing agent, and it is the wrong choice if it is your only mitigation. Treat it as a probability lever on the LM plus a signal to downstream logging, and stack it with tool-side authorization (see [65-ai-agent-defenses.md](./65-ai-agent-defenses.md), forthcoming).
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 Three variants, each transforming the untrusted span before it reaches the model. All three are prompt-time preprocessing wrappers.

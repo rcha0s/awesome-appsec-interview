@@ -2,6 +2,8 @@
 
 > A vector store is a similarity index keyed by geometry, not identity. That single design fact drives every security invariant here: the geometry is a shared address space any query can traverse, so tenant separation, authorization, and confidentiality all live outside the ANN structure. The four systems in scope differ in where they let you put that boundary. pgvector inherits Postgres RLS and can enforce tenancy in the SQL planner, Pinecone uses namespaces as a soft partition that only matter if the API key scope and any proxy layer bind them to the caller, Weaviate offers a proper multi-tenancy class mode where each tenant is a separate shard, and Milvus uses partition_key or partitions plus RBAC. When the boundary is implemented as a filter applied after top-k, the tenant-scope invariant is already violated regardless of which product you picked.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```sql

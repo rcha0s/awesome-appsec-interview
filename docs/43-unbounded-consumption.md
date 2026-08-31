@@ -2,6 +2,8 @@
 
 > The root cause is that autonomous decision loops cannot self-terminate under adversarial input, and every unbounded number in the stack (iteration cap, `max_tokens`, recursion limit, embedding chunk size, retry count) is a multiplicative term in a product that ends in dollars. LLM10 renamed the 2023 "Model DoS" category because the observable damage in 2024 to 2025 stopped being availability outages on shared inference and became direct wallet drain on the caller's metered account. The attacker does not need to compromise the model; the attacker only needs to convince the agent that "one more tool call" is justified, then let the multiplicative fan-out of tool-driven agents do the arithmetic. Cost is a security property because compute is now a credential of the operator, spendable by any prompt. The model's own token predicting "yes, one more tool call would help" is not a safety signal, it is what the attacker just steered.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```
