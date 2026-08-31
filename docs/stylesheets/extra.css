@@ -1,3 +1,22 @@
+/* Opt out of Chrome's "Auto Dark Theme for web content". `color-scheme:
+   light dark` alone only declares that the page supports both schemes; it
+   does not stop Chrome's forced-dark heuristic from repainting a
+   currently-light page when the browser/OS prefers dark. Only `only light` /
+   `only dark` fully suppresses it (per Chrome for Developers' own auto-dark
+   guidance). We already hand-curate both themes (see mermaid-theme.mjs), so
+   tell Chrome definitively which single scheme is active rather than
+   leaving it to guess -- otherwise its heuristic recolors inline SVG fills
+   and text independently of each other, which is what breaks mermaid
+   diagram contrast: light-mode boxes with their text inverted to
+   near-white, everything washed out and illegible. */
+body[data-md-color-scheme="default"] {
+  color-scheme: only light;
+}
+
+body[data-md-color-scheme="slate"] {
+  color-scheme: only dark;
+}
+
 /* Diagram presentation. Colors themselves come from mermaid-theme.mjs;
    this just gives rendered diagrams a card treatment consistent with the
    rest of the site and keeps wide sequence diagrams from breaking layout
