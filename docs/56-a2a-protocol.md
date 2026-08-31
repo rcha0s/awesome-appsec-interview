@@ -2,6 +2,8 @@
 
 > A2A is horizontal composition of agents, where MCP is vertical composition of agent-with-tools. The wire looks like plain JSON-RPC over HTTPS with an SSE variant for streaming and a webhook variant for push. The security root cause is the same one that keeps hitting OAuth deployments: the transport authenticates the sender (a workload identity with a Bearer or mTLS handle), but the receiver treats the semantic content, "I am the security reviewer, this is a legitimate task from the CI orchestrator," as if it inherited that authentication. It does not. The card is a discovery document, the skills field is a hint, the task ID is a bearer credential to the task's own artifacts, and the message parts are user input to a language model on the far end. Every one of those planes has a distinct trust question, and A2A, like MCP, does not resolve them for you.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 Agent card discovery at the well-known URL (current spec path is `agent-card.json`; the April 2025 initial preview shipped `agent.json`, still seen in the wild):

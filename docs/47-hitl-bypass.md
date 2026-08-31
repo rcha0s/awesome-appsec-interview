@@ -2,6 +2,8 @@
 
 > HITL is a cryptographic-style binding problem dressed up as UX. The approver signs a decision on a summary the model wrote about the payload the model chose, in a UI the model can format, on a channel the model can crowd. Every one of those substitutions is a place where the thing approved diverges from the thing executed. The invariant that matters is irreversibility gating: the human signal must be bound to the exact irreversible bytes, freshly, out-of-band, and default-deny. Systems fail this invariant by accepting model-authored risk labels, by batching, by auto-approving anything tagged "read-only", and by training against the resulting approval logs so the model learns which framings get through. Treat the confirmation dialog as an attacker-controlled surface until the runtime, not the model, populates every field the user sees.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

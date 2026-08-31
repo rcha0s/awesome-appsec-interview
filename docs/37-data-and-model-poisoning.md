@@ -2,6 +2,8 @@
 
 > Poisoning is a supply chain attack on statistics. Every row of training data is an unsigned commit to the model's behavior, and every RAG document is a runtime commit to the model's context. The invariants below all reduce to one property: known provenance, reproducible transformation, and a decision procedure that can reject a batch. Backdoors specifically exploit the gap between the eval distribution and the deployed distribution, so a clean holdout is not evidence of a clean model. The Sleeper Agents result (arXiv:2401.05566) showed that safety training can leave a backdoor intact and even harden it against removal, which reframes poisoning from a preprocessing hygiene issue into a threat that must be modeled at the weight level. RAG and memory poisoning collapse the training-time window into the request path, so the same taxonomy applies at inference with a much shorter attacker feedback loop.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```json

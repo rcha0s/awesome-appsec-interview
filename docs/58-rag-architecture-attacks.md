@@ -2,6 +2,8 @@
 
 > RAG turns a language model into a search-fronted assistant, and in doing so it moves the trust boundary from "the developer wrote the prompt" to "any document that made it into the index is now a prompt". The pipeline has six trust transitions: source to loader, loader to chunker, chunker to embedder, embedder to index, index to retriever, retriever to prompt. Each transition is a place data changes representation, and each representation change is a place an invariant can be silently dropped. Multi-tenant RAG adds an authorization boundary on the retriever, and if that boundary is enforced post-retrieval instead of as a pre-filter on the ANN query, ranking noise leaks documents across tenants. The reranker is often overlooked: teams add a second-stage LLM reranker and thereby double the injection surface. Output post-processing is where a compromised prompt turns into a network egress, which is why markdown image and hyperlink stripping belong on the critical path.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

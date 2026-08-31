@@ -2,6 +2,8 @@
 
 > An inference server is a multi-tenant time-sharing kernel for GPUs, and every side channel that ever hurt CPU multi-tenancy re-appears one layer up. The scheduler batches heterogeneous requests to keep tensor cores busy, so any resource whose state is a function of prior requests (KV cache, prefix cache, speculative-draft acceptance state, page-attention block pool) becomes an oracle when latency or token-count is observable to a different tenant. The control plane is worse than the data plane, because Triton, TGI, and vLLM all default to no authentication and rely on the operator to bolt a proxy in front. Model artifacts are executable code in disguise: a Python backend, a custom op library, or a pickle-shaped weight file crosses from "data" to "code" the moment the server loads it, which is why [62-model-file-formats.md](./62-model-file-formats.md) is a hard prerequisite for reasoning about this surface. The framework matters because caching modes, tokenizer placement, and admin surfaces differ per implementation, and the wrong flag flipped in a Helm chart is how a "GPU cluster" turns into a public RCE.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 Triton Inference Server exposes an unauthenticated model-repository control plane over HTTP. The following request loads an arbitrary model directory from disk into GPU memory on a server that left `--model-control-mode=explicit` enabled without an auth proxy:

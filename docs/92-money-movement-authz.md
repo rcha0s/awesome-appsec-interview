@@ -2,6 +2,8 @@
 
 > A money-movement endpoint must enforce two invariants at once: the caller is authorized to move this specific money to this specific receiver for this specific amount, and the same logical request produces exactly one movement even under retry, concurrency, or partial failure. Authorization that only checks principal-owns-account leaks funds through amount tampering, receiver substitution, and currency confusion. Idempotency that only lives in the client leaks funds through double-charges when the network drops the response. Both invariants live server-side, both bind to the request semantics, and both must hold under adversarial retry patterns. The rest of the surface is defense in depth around these two facts.
 
+**Interview frequency:** Situational
+
 ## How it works
 
 A payment or transfer API sits on top of a ledger. The ledger has accounts with balances, and every movement is a pair of entries (debit source, credit destination) that must commit atomically. The API layer accepts a request, decides whether to allow it, and translates it into a ledger transaction. Between "accepts" and "commits" sit the two attack surfaces this doc covers.

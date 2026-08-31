@@ -2,6 +2,8 @@
 
 > SAML 2.0 authentication rests on a single load-bearing claim: the Identity Provider signed *this specific Subject inside this specific Assertion, and the Service Provider validated that signature over the exact bytes it then trusted.* Every deep SAML bug is a break in that chain. The XML data model lets attackers wrap, comment, or re-parent signed elements so the signature verifier and the business-logic reader look at different bytes. Add optional signatures (Response vs Assertion), optional Audience and InResponseTo checks, and multiple bindings that deliver assertions through the browser or a back-channel, and the "authenticated" identity often turns out to be whichever `NameID` the attacker last pasted into a `<Subject>`. SAML is not broken by cryptanalysis, it is broken by parse/verify skew. Design and review as if the signature verifier and the identity extractor are two different people who must agree on which node they read.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 Signed SAML Response over HTTP-POST (elided, whitespace inserted for readability):

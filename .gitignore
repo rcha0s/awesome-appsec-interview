@@ -19,5 +19,11 @@ desktop.ini
 # MkDocs build output
 site/
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv_check/
+
 # Claude Code project-local settings (machine-specific)
 .claude/settings.local.json

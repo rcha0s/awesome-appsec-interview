@@ -2,6 +2,8 @@
 
 > SSO is not a protocol, it is a trust delegation pattern that hands identity assertion to a central Identity Provider (IdP) so a user proves themselves once and rides that proof into many Service Providers (SPs). The pattern is implemented over OIDC (JSON, JWT-bearer), SAML (XML, signed assertions), header-based reverse proxy (Cloudflare Access, OAuth2-Proxy), LDAP passthrough, or Kerberos IWA, and every one of them boils down to the SP verifying a cryptographic assertion that names an audience, an issuer, a subject, and a time window. The root cause of nearly every SSO breach is that the SP relaxed one of those four checks, or accepted an unsolicited assertion, or forgot that the local SP session outlives the IdP session. IdP compromise is the defining blast radius: a stolen signing key or admin console lets the attacker mint valid identities into every downstream SP, and this is what Golden SAML (CyberArk Labs, 2017; observed in the SolarWinds intrusion, 2020) exploited. Single Logout (SLO) is the mirror problem: even when logout at the IdP works, SPs frequently keep issuing local session cookies until they expire on their own.
 
+**Interview frequency:** Common
+
 ## Quick reference
 
 Wire-level shape of a SAML SP-initiated flow (POST binding, abbreviated):

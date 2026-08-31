@@ -2,6 +2,8 @@
 
 > Tokenization swaps a sensitive value (PAN, SSN, bank account number) for a surrogate string that carries no exploitable information on its own, and stores the mapping inside a small vault that is the only system in the environment allowed to reverse the substitution. The design goal is not confidentiality per se (encryption already provides that) but scope reduction: shrink the population of systems that touch raw cardholder data down to the vault, so PCI DSS audit, key management, and blast radius all collapse to one place. Payment tokenization has three distinct flavors with very different security properties: PSP or merchant tokens (portable inside one PSP), network tokens issued by Visa VTS, Mastercard MDES, Amex, or Discover (portable across merchants, lifecycle-managed by the network), and device tokens on Apple Pay or Google Pay (bound to a secure element with a per-transaction cryptogram). Getting the flavor right matters more than any single vault control: a stolen PSP token is replayable within that PSP, a stolen device DPAN without the cryptogram is inert. The attacks that matter target the de-tokenization surface (oracle APIs, SSRF into the vault, per-caller scoping bugs), the tokenization moment itself (pre-tokenization logging of raw PAN), and the token generator (predictable format-preserving output under FF1 or FF3 attacks).
 
+**Interview frequency:** Situational
+
 ## How it works
 
 ### Vault architecture

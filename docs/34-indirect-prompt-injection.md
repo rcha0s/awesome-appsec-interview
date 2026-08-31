@@ -2,6 +2,8 @@
 
 > An LLM has no ontological distinction between "instruction" and "data" past the tokenizer; everything is one flat token sequence over which attention runs uniformly. The system prompt is privileged by training convention and sequence position, not by any hard guarantee. Indirect prompt injection exploits this by planting attacker-controlled tokens inside a channel the agent is expected to read but treats as inert: retrieval output, tool observation, memory, another agent's message. The root cause is the fusion of control plane and data plane inside one context window. Unicode smuggling, markdown-image exfil, and memory persistence are delivery and amplification on top of that primitive. Defenses that keep untrusted tokens out of the reasoning model entirely close the class; defenses that only sanitize surface tokens do not.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```

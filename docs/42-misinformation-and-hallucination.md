@@ -2,6 +2,8 @@
 
 > Hallucination is a distribution artifact, not a bug: an autoregressive LM samples the next token from a distribution that has no built-in truth constraint, so fluency and factuality decorrelate freely. The security-relevant subset is narrower. Any output that names an external identifier (a package, a domain, an API path, a function signature, a CVE, a citation) becomes a supply-chain instruction the moment a downstream system acts on it. The attacker's job is to make that identifier resolve to something they control, and slopsquatting on public registries is the cheapest realization of that primitive. Grounding is the defense: bind every externally-resolvable identifier back to a source of record the org has authenticated, and refuse to act on identifiers that do not resolve. RAG alone does not ground, it merely retrieves; grounding requires attribution the caller can verify and a refusal path when attribution is absent.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 A developer asks a coding assistant for a Python HTTP client with retry. The model emits an import for a package that does not exist on PyPI:

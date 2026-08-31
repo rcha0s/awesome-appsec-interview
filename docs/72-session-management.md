@@ -2,6 +2,8 @@
 
 > A session is a server's memory that a specific browser has already authenticated, expressed as one bearer secret the browser presents on every request. The root cause of most session bugs is conflating this bearer with the authentication event itself: the login proves who the user is, and the session ID only proves the browser holds that proof. Treat the session ID as capability, not identity: anyone who reads its bytes becomes the user until the server invalidates them. That framing dictates why HttpOnly, Secure, SameSite, fixation rotation, and privilege-change rotation all exist as separate controls. Each closes one specific way the bytes leak or get planted. Everything else in this doc is a corollary.
 
+**Interview frequency:** Common
+
 ## Quick reference
 
 ```http

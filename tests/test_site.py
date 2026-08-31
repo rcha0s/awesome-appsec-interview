@@ -29,7 +29,7 @@ def _mkdocs_build_warnings() -> list[str]:
 
 
 def _mkdocs_yml_text() -> str:
-    return MKDOCS_YML.read_text()
+    return MKDOCS_YML.read_text(encoding="utf-8")
 
 
 def _nav_doc_paths() -> list[str]:
@@ -73,7 +73,7 @@ class TestMermaidConfig:
 
     def test_mermaid_blocks_present_in_docs(self):
         """At least one doc must contain a mermaid code block (sanity check)."""
-        mermaid_docs = [f for f in DOCS.rglob("*.md") if "```mermaid" in f.read_text()]
+        mermaid_docs = [f for f in DOCS.rglob("*.md") if "```mermaid" in f.read_text(encoding="utf-8")]
         assert len(mermaid_docs) > 0, "No mermaid diagrams found in docs/"
 
 

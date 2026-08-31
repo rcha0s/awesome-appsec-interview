@@ -2,6 +2,8 @@
 
 > Nothing in the transformer forwards a privilege bit alongside a token. The chat template is a rendering convention that puts a system string before a user string in the same sequence, and the model has been trained, imperfectly, to prefer the earlier string when the two conflict. Any user turn that produces a stronger next-token prediction than the training gradient laid down wins that turn. Refusal is a learned surface, so paraphrase, encoding, translation, and suffix search all attack the surface directly. The only durable defenses live outside the model, at the input filter, the output filter, and the tool-call authorization layer.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 Chat template rendered on the server for a customer-support agent. The system prompt sets policy, the user turn carries the injection, the model concatenates them into a single token sequence with only advisory role markers:

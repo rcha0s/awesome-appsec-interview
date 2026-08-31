@@ -2,6 +2,8 @@
 
 > Cascading hallucination is a trust-boundary failure disguised as a correctness problem. Each agent in a mesh is trained to produce fluent output, and the orchestrator's transport is trained to move that output cheaply, so the message bus becomes a laundering pipeline where uncertainty enters on hop 1 and exits as fact on hop 2. The planner-executor split makes this worse because the planner is deliberately given no tools (to reduce blast radius) while the executor is deliberately given tools (to accomplish work), and the plan is the only thing that crosses the boundary. When the plan is treated as spec rather than as untrusted input, the low-privilege agent has effectively delegated its hallucinations to the high-privilege one. Mesh topologies differ in where the boundary sits, but the failure mode is identical: privileges concentrate downstream, provenance dilutes downstream, and the attacker's leverage grows monotonically with each hop.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```

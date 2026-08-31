@@ -2,6 +2,8 @@
 
 > LLM05 is the classical trust-boundary bug wearing a new hat. Every sink in the system, the DOM, the SQL driver, the shell, the file API, the next agent, expects input at a specific escape context and treats bytes accordingly. The LLM sits upstream of those sinks and produces text that will be interpreted, not merely displayed. A junior fix ("filter the model") is upside down: sanitization belongs at the sink, in the exact context that will parse the bytes. This category recycles decades of appsec knowledge that pre-LLM code shops had already internalized. The regressions happen because prototype code paths pipe model output straight into `innerHTML`, `subprocess.run(..., shell=True)`, or f-string SQL, and nobody re-drew the trust boundary.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```http

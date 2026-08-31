@@ -2,6 +2,8 @@
 
 > A federation replaces per-pair OAuth or SAML registration with a signed graph rooted at a trust anchor. Every entity (RP, OP, intermediate authority, trust-mark issuer) publishes an Entity Configuration, a self-signed JWT at `/.well-known/openid-federation` that declares its keys, metadata, and one or more `authority_hints` pointing at superiors. To decide whether to trust a leaf, a resolver walks up those hints, fetching Subordinate Statements from each intermediate, until it reaches a preconfigured trust anchor whose public key it already pins. The chain carries a top-down `metadata_policy` that superiors may impose on subordinates, and the effective metadata seen by the OP or RP is the policy-composed view, not the raw self-declaration. Compromise the trust anchor key and every entity under it is spoofable; misimplement `max_path_length` or accept an unsigned link and you get a DoS or a full identity spoof.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```

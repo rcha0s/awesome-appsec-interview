@@ -2,6 +2,8 @@
 
 > Kubernetes is a distributed control plane that reconciles declared state (YAML manifests) into running containers across a fleet of nodes. From an appsec view it stacks three trust boundaries. The API server mediates all state changes, the kubelet on each node turns Pod specs into running containers, and the pod-to-pod network is flat and permissive by default. Every attack path either abuses an over-broad RBAC grant to talk to the API server, steals a service account token to impersonate a workload, or exploits a Pod spec field (hostPath, privileged, hostNetwork) that the admission layer failed to block. The 4 Cs model (Cloud, Cluster, Container, Code) exists because a hardened pod inside a soft cluster inside an over-permissive cloud IAM role still yields cluster takeover; the layers compose multiplicatively. Pod Security Policy is gone (removed in v1.25); Pod Security Admission is built in but coarse, so most production clusters run Kyverno or Gatekeeper for real policy. The interview bar is not "name the components" but "trace a stolen pod token through RBAC, kubelet, and network policy to explain why it did or did not become cluster-admin."
 
+**Interview frequency:** Situational
+
 ## How it works
 
 ### Control plane and node components
@@ -9,6 +11,30 @@
 The API server (`kube-apiserver`) is the only component that talks to etcd and the only front door for kubectl, controllers, and kubelets. Every request goes through authentication, authorization (RBAC by default), and admission control (mutating then validating) before the object is persisted. etcd stores all cluster state including secrets; if etcd leaks, the cluster leaks. The controller manager runs reconciliation loops (Deployment, ReplicaSet, ServiceAccount token controller, etc.). The scheduler picks nodes for pods based on resource requests, taints, and affinities.
 
 On each node the kubelet watches the API server for Pods assigned to its node and instructs the container runtime (containerd or CRI-O; Docker shim was removed in v1.24) via CRI to pull images and start containers. kube-proxy programs iptables or IPVS to implement Service load balancing. The CNI plugin (Calico, Cilium, AWS VPC CNI, etc.) provisions pod networking and, if the plugin supports it, enforces NetworkPolicy.
+
+```mermaid
+flowchart TB
+  subgraph CP["Control plane"]
+    API["kube-apiserver"]
+    Etcd["etcd"]
+    CM["Controller manager"]
+    Sched["Scheduler"]
+  end
+  subgraph WN["Worker node"]
+    Kubelet["kubelet"]
+    Proxy["kube-proxy"]
+    CNI["CNI plugin"]
+    CRI["Container runtime<br/>(containerd / CRI-O)"]
+  end
+  Client["kubectl / controllers"] --> API
+  API --> Etcd
+  API --> CM
+  API --> Sched
+  Kubelet <--> API
+  Kubelet --> CRI
+```
+
+The sequence below shows the same components in motion: a Pod create request flowing through the API server's authn/authz/admission chain to etcd, then the kubelet on the target node picking it up.
 
 ```mermaid
 sequenceDiagram

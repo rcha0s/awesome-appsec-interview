@@ -2,6 +2,8 @@
 
 > Excessive Agency is not a single bug, it is the aggregate blast radius of an agent that has more capability, more authority, or more autonomy than the task requires. The three root causes in the OWASP taxonomy compound multiplicatively: a tool that does too much, holding a credential that reaches too far, invoked without a human gate. The exploitation primitive is almost always the same, prompt injection from a low-trust content source drives a tool call that would have been fine if the tool were scoped correctly. The ambient-credential problem is the enabling condition, one bearer token authorises everything the agent can touch, so any successful hijack is total. Confused deputy is the shape of the actual attack, the LLM is the deputy that holds authority it cannot reason about, and injected content is the principal it should not have trusted. The defense is boring and structural: per-tool credentials, per-action scope, human gates on irreversible operations, and taint tracking between tools. Models cannot self-police this because the check has to succeed even when the model is fully compromised.
 
+**Interview frequency:** Situational
+
 ## Quick reference
 
 ```json

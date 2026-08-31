@@ -2,6 +2,8 @@
 
 > MCP is JSON-RPC 2.0 between a host (Claude Desktop, Cursor, an agent runtime), a client library inside the host, and one server per tool provider. The security-relevant fact is that the server is untrusted code that speaks into the model's context window: every string a server returns (tool description, resource content, prompt template, sampling request) is prompt-injectable content, and every tool the server exposes is a capability the model can invoke with attacker-shaped arguments. Capabilities are negotiated in `initialize` because both sides need a stable contract about what methods are reachable, and unreachable methods are the cheapest form of attack surface reduction. Session identity, tool consent, and OAuth audience are the three primitives that keep one server from acting as another, from acting outside its declared scope, and from replaying tokens minted for a different service. The 2026-07-28 revision (with the intermediate 2025-11-25 Security Best Practices document) added Tasks, Skills over MCP, and MCP Apps to the surface, and substantially expanded the security guidance to cover SSRF against MCP clients during OAuth discovery, session hijacking (both impersonation and prompt-injection variants), local MCP server compromise, OAuth authorization URL scheme validation, stdio proxy escalation, and progressive scope minimization.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 Client to server, stdio transport, initialization request. JSON-RPC 2.0, LSP-style framing over stdout (newline-delimited JSON, one message per line):

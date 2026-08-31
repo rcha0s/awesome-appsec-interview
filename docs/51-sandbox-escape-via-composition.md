@@ -2,6 +2,8 @@
 
 > The sandbox is not the trust boundary. The trust boundary is the union of every tool the planner can call in the same session and every piece of state those tools share. Each tool is designed by a different team with its own threat model: the interpreter team caps memory and blocks sockets, the browsing team enforces an SSRF allowlist, the memory team implements per-user namespaces. None of them models the graph where the planner composes them. The escape lives in the seam. When the planner is untrusted (any model that reads user or tool-returned data is untrusted) any pair of tools that lets one write and another read the same state becomes an implicit pipe, and any tool with network egress becomes the exit valve.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```

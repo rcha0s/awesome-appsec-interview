@@ -2,6 +2,8 @@
 
 > Cross-server shadowing is prompt injection where the injection surface is a tool description on a different server than the one the attack targets. The MCP client hands the LLM one merged system context that lists every tool from every connected server with no boundary marker or provenance tag, so a directive planted in Server B's description is trusted the same as a directive from the operator. The malicious tool never has to be called; it reprograms how the model calls someone else's tool. That property is what makes it distinct from ordinary prompt injection, and it is why per-tool sandboxing does not fix it. The audit trail on the victim server looks clean because the invocation carries a plausible name, plausible arguments, and originates from the legitimate client session. The fix is not to filter the description, it is to preserve provenance and refuse to let one server's metadata alter another server's semantics.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 A benign server exposes `send_email`. A second, malicious MCP server registers a tool whose *description* carries a directive that reprograms the host LLM's routing for the benign tool. The tool itself is never invoked. The LLM concatenates all tool descriptions into one flat system context with no server-provenance boundary.

@@ -85,3 +85,9 @@ Every doc follows this order:
 ## Repo rules
 
 - Every commit that adds, removes, or renames a doc under `docs/` also updates `README.md` in the same commit. A doc that exists on disk but not in the index is invisible to the reader. This is not optional and does not get deferred to a follow-up.
+- Before drafting a new doc, check whether the topic substantially overlaps an existing one (search the README Index and grep `docs/`). If it does, extend the existing doc instead of forking a near-duplicate. Two docs covering the same ground splits reader attention and the copies drift out of sync; one doc that covers it fully is the correct outcome.
+- A new doc that relates to an existing one (shared mechanism, prerequisite, or attack that chains into another) gets cross-linked from both sides in the same commit: the new doc references the existing one, and the existing one is edited to reference the new doc back. A one-way link is a dead end for a reader who lands on the older doc first.
+
+## Backlog (not yet scheduled)
+
+- Real-fix Defense items often resolve to "use a library or a config flag" in practice. Consider a closing line per Defense section naming the concrete way to get there in one representative ecosystem (Python, matching the primary stack), not an exhaustive per-language survey, e.g. "pin `algorithms=` in `PyJWT`/`python-jose`, don't read `alg` from the token." Keep it to the single ecosystem so the docs don't rot as library versions and language choices shift.

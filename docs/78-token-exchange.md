@@ -2,6 +2,8 @@
 
 > Token exchange is the moment a service that holds a caller's token asks the authorization server for a different token to call a downstream API, and the safety of the whole chain collapses to whether the AS enforces four constraints on that request: the subject token is valid, the actor is authorized to act for that subject, the new audience is a resource the caller may reach, and the new scope is a subset of what the subject consented to. RFC 8693 defines the request and response shape (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, `subject_token`, `actor_token`, `requested_token_type`, `audience`, `resource`, `scope`), and RFC 8707 defines how the `resource` parameter binds the resulting token's audience so it cannot be replayed against another API. When services skip audience binding or actor validation, they collapse delegation into impersonation and give any compromised middle tier a universal token. The distinction matters because `act` and `may_act` claims (RFC 8693 section 4.1) exist precisely so the downstream can see the full chain and refuse when the actor was never granted delegation rights. Doc 55 (MCP) and doc 50 (credential passthrough) both trace to the same root cause: a token minted for audience A being accepted at audience B.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```http

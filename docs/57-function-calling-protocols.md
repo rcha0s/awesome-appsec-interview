@@ -2,6 +2,8 @@
 
 > Every function-calling protocol is a two-turn dance: the model emits a structured call, the host emits a matching result, and the model's next generation is conditioned on both. The provider validates protocol-level well-formedness (id pairing, JSON parse) and, in strict or structured modes, schema shape; the host has to enforce everything else. The root cause of nearly every function-calling vulnerability is that the model's tool call carries no authenticated principal (auth is ambient in the host), the schema binds shape but not semantics ("string" does not mean "safe SQL fragment"), and `tool_result` content re-enters the context window as text the model then reads as trusted. Provider documentation is surprisingly explicit that tool outputs are untrusted. Field engineers routinely miss that JSON mode is not Structured Outputs and that `strict:true` is not on by default. Each attack below violates exactly one invariant the host was supposed to reconstruct.
 
+**Interview frequency:** Niche
+
 ## Quick reference
 
 ```http
