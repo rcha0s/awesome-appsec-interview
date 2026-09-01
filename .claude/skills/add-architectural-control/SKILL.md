@@ -34,11 +34,11 @@ Adds ONE new architectural-control doc to the awesome-appsec-interview repo, mat
 ### 1. Pick the doc number
 
 ```bash
-next=$(ls docs/ | grep -E '^[0-9]{2}-' | awk -F- '{print $1}' | sort -n | tail -1)
+next=$(ls docs/ | grep -E '^[0-9]{2,3}-' | awk -F- '{print $1}' | sort -n | tail -1)
 echo $((next + 1))
 ```
 
-Pad to two digits. If it would exceed 99, ask the user how to renumber; do not overwrite.
+Pad to two digits below 100, three digits at 100+ (matches the existing flat sequence: `docs/99-*.md`, `docs/100-*.md`). The `{2,3}` in the grep pattern is required once numbering crosses 99, a 2-digit-only pattern silently misses `docs/100-*.md` and beyond and would recompute a colliding number.
 
 ### 2. Generate the slug
 
