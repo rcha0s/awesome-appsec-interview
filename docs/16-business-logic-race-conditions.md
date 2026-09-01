@@ -276,31 +276,45 @@ The endpoint enforces authentication but not ownership: `GET /api/orders/1042` r
 
 ## Interviewer probes
 
-Mid: "Walk me through a real-world race-condition bug you'd look for in this API."
+**Walk me through a real-world race-condition bug you'd look for in this API.**
+
+Mid: I'd look for a check-then-act sequence, like a coupon or gift-card redemption, where firing the same request concurrently lets two threads both pass the check before either commits, so the action happens twice.
 
 Principal: The 2016 mental model, a coupon or gift-card endpoint gets hit twice concurrently and redeems twice, is necessary but no longer sufficient. HTTP request processing is not atomic: every endpoint can pass through invisible sub-states that exist for about a millisecond, a session that is briefly logged-in-but-MFA-not-yet-enforced, a user row created before its API key is set, a password-reset session holding one user's ID while the token went to another. The modern framing, per James Kettle's Black Hat USA 2023 research, is "with race conditions, everything is multi-step": you are not just racing two identical requests against a check-then-update, you are racing a single request against itself while it transitions through states nobody drew on the state diagram.
 
-Mid: "If a race window is only a few milliseconds wide, how do you reliably exploit it over the network?"
+**If a race window is only a few milliseconds wide, how do you reliably exploit it over the network?**
+
+Mid: I'd send the requests as close together as possible, using a tool like Burp's "send group in parallel" so they land on the server nearly simultaneously.
 
 Principal: Network jitter used to hide sub-second race windows by scattering when requests physically arrive, which is why races were historically dismissed as unreliable. Kettle's single-packet attack neutralizes that: pre-send the bulk of 20 to 30 HTTP/2 requests but withhold the final frame, wait roughly 100ms, disable TCP_NODELAY so Nagle's algorithm batches the finishing frames, then release them all together in one TCP packet. Because the server only starts processing once a request is complete, all requests begin within about a millisecond of each other, turning what used to take hours of last-byte-sync tuning into a technique that lands reliably in seconds. HTTP/1 falls back to the weaker last-byte synchronization.
 
-Mid: "You tested a suspected database race by firing concurrent requests from one authenticated session and saw no collision. Is the endpoint safe?"
+**You tested a suspected database race by firing concurrent requests from one authenticated session and saw no collision. Is the endpoint safe?**
+
+Mid: Not necessarily safe, a clean result from one test run doesn't rule out a race, so I'd want to retest with more requests or a different setup before concluding it's fine.
 
 Principal: Not necessarily; you may have a false negative. PHP's native session handler processes only one request per session at a time by default, so it serializes your "concurrent" requests before they ever reach the database, hiding a race that is trivially exploitable with two different sessions. The fix for the test, not the app, is to re-probe with a distinct session token per request. More generally, any session handler or ORM that batches a whole record in memory is internally consistent with itself but does nothing to protect a different storage layer underneath it, so a clean result at one layer does not clear the layer below it.
 
-Mid: "If two conflicting requests aren't sent at the same time, is a race condition still possible?"
+**If two conflicting requests aren't sent at the same time, is a race condition still possible?**
+
+Mid: Yes, if they both touch the same shared state before it's fully written, they can still collide even without being sent at exactly the same moment.
 
 Principal: Yes, and this is where a lot of testers stop looking too early. Not every collision is immediate: if a site processes data in periodic background batches, two conflicting requests sent twenty minutes apart can still collide when the batch runs, with no synchronized-request timing and no immediate response clue to notice. Spotting anomalies, an inconsistent email later, a changed state that does not match what any single request should have produced, matters more here than the HTTP response, because the response to each individual request looks completely normal.
 
-Mid: "Wouldn't rate-limiting the endpoint stop this race condition?"
+**Wouldn't rate-limiting the endpoint stop this race condition?**
+
+Mid: It would cut down how many concurrent requests get through, which makes the race harder to win, but it doesn't fix the underlying check-then-act flaw.
 
 Principal: It narrows the window but does not close it, so it is a mitigation, not a fix. Rate limiting still allows a small number of concurrent requests through in the same interval, which is exactly what a race needs. Worse, an attacker can abuse a leaky-bucket rate limiter's own throttling delay as a timing primitive, flooding dummy requests to trigger a predictable server-side stagger that helps align windows across two different endpoints. The actual fix is making the check and the act one atomic operation, a conditional UPDATE, a unique constraint, or a row lock inside a transaction, not slowing the attacker down.
 
-Mid: "We wrapped the balance check and the deduction in a database transaction. Doesn't that make it safe from a race?"
+**We wrapped the balance check and the deduction in a database transaction. Doesn't that make it safe from a race?**
+
+Mid: Not on its own, a transaction gives you atomicity and rollback, but two transactions can still both read the same balance before either one writes, unless you also add locking or the right isolation level.
 
 Principal: Not by itself. Transactions give you atomicity and rollback, not mutual exclusion. At the default isolation level most databases ship with, READ COMMITTED on Postgres, MySQL/InnoDB, and SQL Server, two concurrent transactions can both SELECT the same balance, both see it as sufficient, both issue the UPDATE, and both commit; the check-then-write race is completely unchanged by the transaction boundary. What actually closes it is a single conditional UPDATE with a rowcount assertion, a SELECT ... FOR UPDATE row lock inside the transaction, SERIALIZABLE isolation with a retry loop, or an application-enforced unique constraint. A candidate who says "just wrap it in a transaction" without naming the isolation level or the locking primitive has not actually answered the question.
 
-Mid: "You found a low-impact race, changing your email to two addresses at once causes a harmless-looking mix-up. Is that worth reporting as-is?"
+**You found a low-impact race, changing your email to two addresses at once causes a harmless-looking mix-up. Is that worth reporting as-is?**
+
+Mid: Yes, I'd still report it, since it demonstrates the check-then-act pattern is broken even if the visible impact looks minor right now.
 
 Principal: Treat it as a starting point, not the finding. James Kettle's GitLab research began exactly there, an object-masking race in Devise where a confirmation email's recipient and its embedded link disagreed, and chasing it further revealed email-verification bypass, pending-invitation hijacking, and OpenID-based account takeover on relying parties (CVE-2022-4037). Races escalate because the sub-state you caught once is often reachable from multiple entry points with different consequences. Kettle has said he personally left real bounty value on the table by not chasing an escalation before a patch shipped, which is the practical argument for treating a race as a structural weakness worth mapping, not an isolated curiosity.
 

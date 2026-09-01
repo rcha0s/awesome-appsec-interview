@@ -229,31 +229,45 @@ The defense is to bind the token to the browser that requested it: set a pre-aut
 
 ## Interviewer probes
 
-Mid: "The login endpoint locks the account after 5 failed attempts. That covers brute-force risk, right?"
+**The login endpoint locks the account after 5 failed attempts. That covers brute-force risk, right?**
+
+Mid: Account lockout after a set number of failed attempts stops an attacker from brute-forcing a single account's password, since they run out of guesses before finding it.
 
 Principal: It covers single-account brute force and nothing else. Credential stuffing needs only one correct guess per account, so a 5-attempt lockout never triggers. Password spraying stays under the threshold by design, a handful of common passwords across many accounts. Worse, a lockout keyed on username becomes a denial-of-service primitive: an attacker who knows a valid username can lock a legitimate user out on demand. Detection for stuffing and spraying has to be velocity- and source-based, not per-account counters, and username enumeration still leaks the account list this lockout is supposedly protecting regardless.
 
-Mid: "Login and password reset return identical error messages and status codes for valid and invalid usernames. Is enumeration solved?"
+**Login and password reset return identical error messages and status codes for valid and invalid usernames. Is enumeration solved?**
+
+Mid: Yes. If the response body and status code are identical for both valid and invalid usernames, an attacker has no observable difference to distinguish the two cases.
 
 Principal: Not necessarily. Even with identical messages and status codes, conditional password hashing leaks account validity through response timing: a valid username triggers an expensive bcrypt/argon2 comparison before rejection, an invalid one returns fast. That latency difference is measurable and distinguishes real accounts from fake ones just as reliably as a different error string would. The fix that actually closes it is running a dummy hash on the invalid-username path so both cases take comparable time, which is the detail that separates "we return the same error string" from an actually-closed side channel.
 
-Mid: "MFA is enabled on this application. Are we good on the authentication side?"
+**MFA is enabled on this application. Are we good on the authentication side?**
+
+Mid: Largely, yes. With MFA enabled, a leaked or guessed password alone isn't enough to log in because the attacker also needs the second factor.
 
 Principal: "MFA is enabled" isn't the question; where in the flow it's enforced is. Is the session authenticated before or after the second factor, meaning can you drop the OTP request and browse straight to an authenticated endpoint? Is the OTP endpoint reachable directly and brute-forceable, given a 6-digit code is only a million possibilities? Can the client-side response that says whether the OTP was valid be flipped? Does password reset or a remember-device cookie skip the second factor entirely? Most real MFA bypasses are broken flow logic, not broken cryptography, so "MFA is enabled" without answering those is an incomplete answer.
 
-Mid: "You found a session-related bug, is it fixation, hijacking, or CSRF?"
+**You found a session-related bug, is it fixation, hijacking, or CSRF?**
+
+Mid: It depends on the mechanism: fixation is planting a known session ID before login, hijacking is stealing a live session ID, and CSRF is riding an authenticated cookie to perform an unintended action.
 
 Principal: Those are three different bugs with three different fixes, and conflating them is a real red flag in an interview. Fixation is the attacker planting a known session ID before the victim logs in, on a permissive session model that doesn't regenerate the ID on privilege change, fixed by always regenerating on login. Hijacking is the attacker stealing a live session ID after the fact, fixed by HttpOnly/Secure and short lifetimes so there's less to steal and less time to use it. CSRF is the attacker riding the victim's already-authenticated cookie to perform an action they didn't intend, fixed by SameSite and anti-CSRF tokens. Each fix addresses a different point in the session's lifecycle; applying the wrong one leaves the actual bug open.
 
-Mid: "The team says logout is implemented. What would you check before taking that at face value?"
+**The team says logout is implemented. What would you check before taking that at face value?**
+
+Mid: I'd verify that clicking logout actually invalidates the session so the old session ID can't be reused, not just that it clears the cookie in the browser.
 
 Principal: Whether logout destroys the server-side session record or only clears the client-side cookie; if it's the latter, the session ID is still valid server-side and usable by anyone who captured it beforehand. Also whether a password change or reset revokes other live sessions, not just the one that changed the password, since otherwise a stolen session survives the exact event meant to kill it. Stateless JWTs make this worse: you can't invalidate one server-side unless you keep expiry very short or maintain a revocation list, which is a real architectural tradeoff worth naming rather than glossing over.
 
-Mid: "A password reset got attacked and the victim never saw a phishing link or any XSS. How would that even be possible?"
+**A password reset got attacked and the victim never saw a phishing link or any XSS. How would that even be possible?**
+
+Mid: The reset link itself was probably built using some client-controlled input, so a legitimate-looking email ended up pointing at a server the attacker controls.
 
 Principal: The most likely mechanism is Host-header reset-link poisoning. If the app builds the reset email's URL from the request's `Host` or `X-Forwarded-Host` header instead of a server-side allowlisted value, an attacker submits the forgot-password request with a spoofed Host pointing at their own domain, and the legitimate app generates and emails a real reset token embedded in a link that resolves to the attacker's server. The victim clicks what looks like a normal reset email and hands the token straight to the attacker. The fix is building the link from an allowlisted host on the server side, never trusting the request's Host header for anything security-relevant.
 
-Mid: "Would you bind the session cookie to the client's IP address to prevent stolen-cookie replay?"
+**Would you bind the session cookie to the client's IP address to prevent stolen-cookie replay?**
+
+Mid: Yes. Tying the session to the IP address it was issued from means a stolen cookie replayed from a different network won't be accepted.
 
 Principal: Mostly wrong for a consumer application, and it's a good test of whether someone has actually operated auth in production. Strict IP or /24 binding does raise the bar on replaying a stolen cookie, but it breaks legitimate users constantly: mobile carriers rotate IPs, corporate NAT churns, IPv6 privacy addresses change, and you'll page support every time someone walks from Wi-Fi to LTE. User-Agent binding is nearly free and catches naive theft, but a competent attacker just replays the header, so it's a weak sanity check at best. The better answer is binding loosely, logging the drift, and feeding coarser signals, ASN change, country change, impossible travel, into risk-based step-up or re-authentication rather than hard-invalidating the session. Strict binding is only defensible for narrow, high-assurance internal tools with a known user population and network egress.
 

@@ -246,31 +246,45 @@ Ordered by how much attack surface each removes within its group.
 
 ## Interviewer probes
 
-Mid: "How do you stop a stolen access token from being replayed by an attacker who has captured it?"
+**How do you stop a stolen access token from being replayed by an attacker who has captured it?**
+
+Mid: Keep access-token lifetimes short and always use HTTPS, so a captured token has a narrow window before it expires and is harder to intercept in transit in the first place.
 
 Principal: The layered answer starts with short TTLs (minutes, not days) plus refresh-token rotation with reuse detection so the theft window is bounded and detectable. Fingerprint cookies (OWASP token-sidejacking mitigation) block naive XSS exfiltration by requiring the paired `HttpOnly` cookie whose SHA-256 is claimed in the JWT. The structural fix is sender-constrained tokens: RFC 8705 mTLS binds the token to the client's TLS certificate via `cnf.x5t#S256`, and RFC 9449 DPoP binds it to an ephemeral client keypair via `cnf.jkt`, with a per-request signed proof JWT carrying `htu`, `htm`, `jti`, and `ath`. Pick mTLS for server-to-server and mobile where cert distribution and pinning are tractable; pick DPoP for browsers and SPAs, but only if the private key lives in non-extractable WebCrypto storage (`extractable: false`) or a hardware keystore, because the XSS that steals the token also steals an exfiltratable key. The wrong answer is IP or user-agent binding: both are trivially spoofed and break real users behind CGNAT or browser updates.
 
-Mid: "How do you rotate JWKS signing keys safely?"
+**How do you rotate JWKS signing keys safely?**
+
+Mid: Add the new key to the JWKS under a new `kid` and start signing new tokens with it, then leave the old key published until every token signed with it has expired before removing it.
 
 Principal: Publish both old and new keys in JWKS with distinct `kid`s. Sign new tokens with the new `kid` immediately, keep the old key in JWKS for at least the maximum outstanding access-token lifetime so in-flight tokens still verify, then remove it. Verifiers cache JWKS with a bounded TTL and refresh on `kid` miss, but rate-limit the refresh, otherwise an attacker sending random `kid` values weaponizes verifiers into a DoS or SSRF amplifier against the JWKS URL. The subtle failures are indefinite caching (a compromised key stays trusted after rotation), loose TLS validation on the JWKS fetch (an on-path fake JWKS forges every token), and removing the old key too early (mass logout mid-session). Emergency compromise response is push a new JWKS, force cache invalidation via a short TTL or an out-of-band signal, and rely on short access-token lifetimes so the window of accepted forgeries is bounded rather than open-ended.
 
-Mid: "What is the difference between an OIDC ID token and an OAuth access token, and why does it matter for a resource server?"
+**What is the difference between an OIDC ID token and an OAuth access token, and why does it matter for a resource server?**
+
+Mid: An ID token tells the client app who the user is, while an access token is what the client presents to call an API on the user's behalf, so a resource server should only accept access tokens, not ID tokens.
 
 Principal: An ID token authenticates the end user to the OIDC client; its `aud` is the client ID, it carries identity claims like `sub` and `email`, and it is not meant to authorize API calls. An access token authorizes API calls; its `aud` is the resource server, it carries `scope`, and per RFC 9068 it should carry `typ: at+jwt` in the JOSE header. Both are typically signed by the same issuer with the same key, so signature verification alone does not distinguish them. A resource server that checks signature, `iss`, and `exp` but skips `aud` and `typ` accepts an ID token as an access token, and an attacker who logs in via OIDC as user X can hit the API as X. The two-line fix is pin `aud` to this API's identifier and pin `typ` to `at+jwt`; RFC 8725 section 3.11 generalizes this as explicit typing.
 
-Mid: "JWTs are supposed to be stateless. Why do most production systems end up building a way to revoke them anyway?"
+**JWTs are supposed to be stateless. Why do most production systems end up building a way to revoke them anyway?**
+
+Mid: Because sometimes you need to kill a token before it naturally expires, like on logout or a suspected compromise, so teams add a denylist or short-lived tokens with refresh rotation to handle that case.
 
 Principal: Statelessness means any backend can verify a token locally without a session-store lookup, but that is exactly what makes revocation hard: there is no server-side record to delete. Real revocation always means giving something back: a denylist keyed on a SHA-256 digest or `jti` with a TTL, short access-token lifetimes paired with refresh-token rotation and reuse detection, or opaque reference tokens that require a lookup. Every one of those reintroduces the state lookup you adopted JWTs to avoid. The senior answer names this trade explicitly and knows when to skip JWTs altogether: a single-datacenter app with an existing session store often gains nothing from JWTs and just inherits the revocation problem for free.
 
-Mid: "RS256-to-HS256 confusion mixes a symmetric and an asymmetric algorithm under one key. Isn't that a fundamental cryptographic flaw?"
+**RS256-to-HS256 confusion mixes a symmetric and an asymmetric algorithm under one key. Isn't that a fundamental cryptographic flaw?**
+
+Mid: No, it's an implementation bug rather than a crypto flaw: some verification code trusts the `alg` header from the token itself instead of pinning the expected algorithm, so an RSA public key can end up being misused as an HMAC secret.
 
 Principal: No, HMAC and RSA are each correctly implemented; the bug lives at the API layer, not the primitive. A generic `verify(token, key)` call dispatches on the attacker-controlled `alg` header instead of the caller pinning which algorithm is acceptable, so the same key material gets reinterpreted under an incompatible algorithm family. That is also why "the RSA key is public anyway" does not save you: JWKS endpoints, TLS certificates, and Git-committed keys routinely leak it, and even when it is not published, tools like `rsa_sign2n`/`sig2n` recover the modulus from two captured tokens. The fix is API design, pin one algorithm per key and reject anything else, which is why RFC 8725 leads with algorithm verification rather than a crypto-level patch.
 
-Mid: "How does the 2022 Java ECDSA 'Psychic Signatures' bug (CVE-2022-21449) relate to `alg: none`, which is a much older attack?"
+**How does the 2022 Java ECDSA 'Psychic Signatures' bug (CVE-2022-21449) relate to `alg: none`, which is a much older attack?**
+
+Mid: Both let a token pass verification without a real signature behind it: `alg: none` does it by telling the verifier there's no signature to check, while CVE-2022-21449 was a buggy ECDSA implementation that wrongly accepted a bogus signature as valid.
 
 Principal: They are the same failure wearing different costumes: a token accepted with no real proof of possession. `alg: none` is the explicit version, an attacker sets the header to an unsecured JWS and an unpatched library treats the empty signature as valid. CVE-2022-21449 is the implicit version: affected Java versions accepted an ECDSA signature with `r = s = 0` as valid against any P-256 public key, so a forged signature with no key knowledge at all passed verification. Recognizing that both are instances of "the verifier never confirmed a real signature was produced," rather than treating them as unrelated bugs from different eras, is the signal of someone who understands JWT verification structurally.
 
-Mid: "A developer wants to put a customer's SSN in a JWT claim because 'it's signed, so it's secure.' What's wrong with that reasoning?"
+**A developer wants to put a customer's SSN in a JWT claim because 'it's signed, so it's secure.' What's wrong with that reasoning?**
+
+Mid: Signing only protects against tampering, not readability, the payload is just base64-encoded, so anyone with the token can decode it and read the SSN in plain text.
 
 Principal: Signing proves integrity, not confidentiality. The header and payload are base64url-encoded, not encrypted, so anyone holding the token, in browser storage, a proxy log, or a leaked request, can decode and read every claim without touching the signature. Only a JWS's signature is cryptographic; if the claims themselves need to be hidden you need a JWE, which actually encrypts the payload, and even then the signature or AEAD tag is what stops tampering, not the encoding. Conflating "signed" with "confidential" is a common interview tell, and the practical fix is simple: never put sensitive data in a JWS payload.
 

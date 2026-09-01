@@ -154,35 +154,51 @@ Ordered by how much risk each removes within its group.
 
 ## Interviewer probes
 
-Mid: "Someone tells you 'we encrypt sensitive fields with AES.' Is that enough to sign off?"
+**Someone tells you 'we encrypt sensitive fields with AES.' Is that enough to sign off?**
+
+Mid: Not on its own. I'd want to know which mode is used, since AES can be run in unauthenticated modes like CBC or CTR that don't protect integrity.
 
 Principal: No, that sentence has left out the two things that actually matter: which mode, and where is the integrity check. Unauthenticated CBC or CTR is malleable, an attacker who knows the plaintext layout can flip bits or splice blocks and get attacker-chosen changes on decrypt, and CBC without a MAC opens a padding oracle that recovers plaintext byte by byte with no key knowledge. "Encrypted" only claims confidentiality; it says nothing about integrity or authenticity. The answer you want to hear is AEAD, AES-GCM or ChaCha20-Poly1305, which gives you both in one primitive, or encrypt-then-MAC if you're stuck with a legacy mode.
 
-Mid: "Why do we hash passwords instead of encrypting them, if encryption is the 'stronger' primitive?"
+**Why do we hash passwords instead of encrypting them, if encryption is the 'stronger' primitive?**
+
+Mid: Because we never need to get the original password back, only check that a login attempt matches, so a one-way hash is the right tool instead of something reversible.
 
 Principal: Because the goal is different. You never need to recover a password's plaintext, only verify that a submitted guess matches, so a one-way, deliberately slow, salted transform is the correct tool, not a reversible one. Encryption implies you can decrypt, which means there's a key that, if compromised, hands over every password in the database in plaintext at once. Seeing passwords encrypted rather than hashed is a red flag unless there's a hard requirement to replay them to a legacy system, and even then the encryption key becomes the single point of failure the hash was designed to avoid.
 
-Mid: "What's the difference between a salt and a pepper, and do you need both?"
+**What's the difference between a salt and a pepper, and do you need both?**
+
+Mid: A salt is a random per-user value stored alongside the hash so identical passwords don't produce identical hashes; a pepper is a separate secret value kept outside the database. Salt is standard practice, pepper is an extra layer some teams add.
 
 Principal: They defeat different attacks. Salt is per-user, public, and stored right alongside the hash; its job is to defeat precomputed rainbow tables and stop two users with the same password from producing the same hash. Pepper is a single secret kept outside the database entirely, typically HMACed in via a KMS or HSM, and its job is to defeat a database-only breach, SQL injection or a stolen backup, because the attacker gets the hashes but not the pepper needed to crack them. A pepper alone provides nothing; it only supplements a proper salted KDF, it doesn't replace one.
 
-Mid: "You're moving from CBC to GCM. Can you keep generating a random IV the same way?"
+**You're moving from CBC to GCM. Can you keep generating a random IV the same way?**
+
+Mid: Yes, a random IV per encryption still works with GCM. The important thing is that it's never reused with the same key.
 
 Principal: Not quite, and conflating "random" with "unique" is exactly where GCM nonce-reuse disasters come from. CBC needs an unpredictable, random IV. CTR and GCM need a nonce that is merely unique, it never has to be random, it just must never repeat under the same key, so a counter is perfectly valid and often safer than relying on randomness at scale. The stakes are also different: reusing a nonce in CTR leaks a keystream and the XOR of two plaintexts, but reusing a nonce in GCM is worse, it recovers the GHASH authentication key itself via the "forbidden attack," letting the attacker forge arbitrary valid tags on top of the confidentiality break. Losing integrity is qualitatively worse than losing confidentiality alone.
 
-Mid: "SHA-256 is collision resistant, so is `H(secret || message)` a safe way to build a MAC?"
+**SHA-256 is collision resistant, so is `H(secret || message)` a safe way to build a MAC?**
+
+Mid: No, that construction is vulnerable to length-extension attacks. You should use HMAC-SHA256 instead, which is built specifically to be safe as a MAC.
 
 Principal: No, and this is where people conflate two different properties. Length extension is a property of the Merkle-Damgard construction, not a break of collision resistance; SHA-256 can be perfectly collision resistant and still let an attacker take the digest of `H(secret||message)` plus the length of `secret`, and compute a valid MAC for `H(secret||message||padding||attacker_data)` without ever learning the secret. That's exactly why HMAC exists, its nested keying construction is specifically designed to prevent this, and it's why SHA-3 and BLAKE2 (not classic Merkle-Damgard, or keyed) don't have the same problem. A candidate who says "SHA-256 is secure so this is fine" has missed that security property and vulnerability class are not the same axis.
 
-Mid: "Is `Math.random()` really a security problem, or is it just 'lower quality' randomness?"
+**Is `Math.random()` really a security problem, or is it just 'lower quality' randomness?**
+
+Mid: It's a real problem. `Math.random()` isn't cryptographically secure, so anything like session tokens or reset codes should be generated with a CSPRNG such as `crypto.randomBytes` instead.
 
 Principal: It's a real, practical exploitation path, not a quality nitpick. `Math.random()` is a statistical PRNG, and in V8 specifically, its algorithm state can be recovered from a handful of observed outputs, which makes predicting every future value deterministic rather than probabilistic. Anything minted from it, a session ID, a password-reset token, an OTP, is only as unpredictable as the attacker's ability to reconstruct the generator state, and that's a solved problem for the common runtimes. The fix isn't "use a better statistical generator," it's use a CSPRNG, `crypto.randomBytes`/`crypto.randomUUID` in Node, for anything security-sensitive.
 
-Mid: "Heartbleed and POODLE both hit TLS around the same era. Are they the same kind of bug?"
+**Heartbleed and POODLE both hit TLS around the same era. Are they the same kind of bug?**
+
+Mid: No. Heartbleed was an implementation bug in OpenSSL that leaked memory, while POODLE was a protocol-level flaw in how SSL 3.0 handled padding.
 
 Principal: No, and naming which class each belongs to is the signal of depth here. Heartbleed is an implementation memory-safety bug, a missing bounds check in OpenSSL's heartbeat handling that over-read up to 64 KB of process memory, including private keys, on a protocol that was otherwise fine. POODLE is a protocol and mode design flaw, SSL 3.0's CBC padding bytes were never checked at all, and an attacker forces a downgrade to that broken protocol to exploit it. One is "the code has a bug," the other is "the design itself is unsound," and the fixes differ accordingly: Heartbleed needed a patched library, POODLE needed SSLv3 disabled outright.
 
-Mid: "The database uses transparent data encryption. Does that protect us against a SQL injection that dumps the customers table?"
+**The database uses transparent data encryption. Does that protect us against a SQL injection that dumps the customers table?**
+
+Mid: No. TDE protects the data at rest, like a stolen disk or backup, but a SQL injection goes through the application's normal database connection, which already decrypts the data.
 
 Principal: No, and that's a common false sense of security. TDE protects data at rest, against a stolen disk, an unencrypted backup, or physical access to storage, because it decrypts transparently for any authenticated connection to the database. A SQL injection query runs through the same authenticated application connection the database always decrypts for, so the injected query gets plaintext back exactly like a legitimate one would. This is OWASP's Scenario #1 for cryptographic failures: matching the encryption layer to the actual threat model matters more than which encryption you picked, TDE answers "what if someone steals the disk," not "what if the application's own trusted path is abused."
 

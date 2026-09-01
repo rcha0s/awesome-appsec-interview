@@ -188,31 +188,45 @@ Everything the LLM doc covers about *indirect* prompt injection applies: tool *r
 
 ## Interviewer probes
 
-Mid: "Is MCP just prompt injection with extra steps, or does it introduce something genuinely new to worry about?"
+**Is MCP just prompt injection with extra steps, or does it introduce something genuinely new to worry about?**
+
+Mid: It's still prompt injection at the core. The attacker's instructions just arrive through tool descriptions and server responses instead of a single pasted prompt, and the model still can't reliably tell instructions from data.
 
 Principal: MCP doesn't introduce a new class of model vulnerability, it packages and distributes existing prompt injection as a supply chain. The injection now ships inside protocol metadata, tool names, descriptions, parameter docs, resource contents, from third parties you chose to connect to. The senior answer names both halves: the root cause is still that the model can't reliably separate instructions from data, but MCP turns "don't paste untrusted text into your prompt" into "you already installed the untrusted text the moment you added this server," which is a fundamentally different operational posture than reviewing a single prompt.
 
-Mid: "If you're auditing tool-call logs to find a malicious MCP server, is it enough to review the servers whose tools actually got invoked?"
+**If you're auditing tool-call logs to find a malicious MCP server, is it enough to review the servers whose tools actually got invoked?**
+
+Mid: No. You should also review the tool descriptions of servers that were merely connected during the session, since a malicious server can influence behavior without ever having its own tools called.
 
 Principal: No, and that's the scary property of cross-server tool shadowing. A malicious server's tool description can inject instructions about a different, trusted server's tools, for example telling the model to silently BCC a trusted `send_email` tool to an attacker address, without the malicious server's own tool ever being called. The interaction log shows only the trusted tool being invoked normally; the malicious server never appears as an actor. Merely being present in the model's context is enough to steer behavior toward a different tool entirely, so detection has to inspect all connected tool metadata across every server in the session, not just the tools that were actually called.
 
-Mid: "Token passthrough and confused deputy sound MCP-specific. Are they?"
+**Token passthrough and confused deputy sound MCP-specific. Are they?**
+
+Mid: No, both are general OAuth failure modes. Token passthrough is accepting or forwarding a token that wasn't issued for you, and confused deputy is a proxy being tricked into using its own authorization on a client's behalf. MCP just inherits them.
 
 Principal: No, they're the OAuth chapter applied to a new resource server. Token passthrough (accepting or forwarding a token not audience-bound to you) and confused deputy (a server proxying a third-party AS with shared client registration that lets one client ride another's consent) are general OAuth failure modes. MCP's spec response is the standard OAuth toolkit: RFC 8707 resource indicators for audience binding, RFC 9068 audience-claim validation, PKCE, and, for confused deputy specifically, per-client consent registries and exact-match redirect URIs. Recognizing that MCP's auth bugs map directly onto an existing framework, rather than treating them as novel, is what separates someone who understands OAuth from someone who's only skimmed the MCP spec.
 
-Mid: "The host requires the user to confirm every tool call before it runs. Does that stop tool poisoning?"
+**The host requires the user to confirm every tool call before it runs. Does that stop tool poisoning?**
+
+Mid: Not fully. It depends on whether the confirmation dialog shows the tool's complete description, since that's where the hidden malicious instructions live, rather than a trimmed name-and-summary view.
 
 Principal: Only if the confirmation shows the complete tool description and the actual arguments, not a trimmed view. Tool poisoning hides its payload inside a tool's `description` field, an `<IMPORTANT>` block instructing the model to read credential files and pass them through an innocuous-looking argument, while telling the model not to mention it to the user. Hosts commonly show the user a simplified confirmation, tool name, maybe a shortened argument preview, while the full description and full arguments go to the model. If the confirmation UI hides exactly the text carrying the attack, the confirmation step is theater. Usable, honest transparency, the complete description and the real arguments, is itself the control, not the mere existence of a confirmation dialog.
 
-Mid: "A user adds a local MCP server by pointing a config entry at a binary someone shared. How does that compare to visiting a website that turns out to be malicious?"
+**A user adds a local MCP server by pointing a config entry at a binary someone shared. How does that compare to visiting a website that turns out to be malicious?**
+
+Mid: It's much riskier. A local MCP server runs as a normal process with the user's full permissions, unlike a browser tab, which is sandboxed away from the rest of the system.
 
 Principal: It's categorically worse, because a local stdio server runs as the user with the user's full rights, not sandboxed the way a browser tab is. Installing an MCP server is closer to installing software than to visiting a site: a malicious startup command, a malicious binary, or a legitimate local server later reached via DNS rebinding are all straightforward host RCE, none of it contained by any browser security boundary. That's why the mitigation is pre-configuration consent that displays the exact spawn command in full and flags dangerous patterns, the same review posture you'd give any software install, not the lighter scrutiny people give a link.
 
-Mid: "Two stateful HTTP MCP servers share a session-keyed message queue for the same client. What's the actual risk beyond a normal session-ID leak?"
+**Two stateful HTTP MCP servers share a session-keyed message queue for the same client. What's the actual risk beyond a normal session-ID leak?**
+
+Mid: If the queue isn't scoped per user, one server could end up reading and delivering a message that was actually meant for a different session on that same shared queue.
 
 Principal: It creates a delivery channel that doesn't require compromising the legitimate server. An attacker who holds a valid session ID for that client can deliver an event to Server B; if Server A polls the same session-keyed queue, it pulls the attacker's payload and hands it to the client as though it came from the legitimate flow. Combined with redelivery and resumable streams, an attacker can terminate an original request early so the legitimate client resumes and receives the attacker's payload instead, and if `notifications/tools/list_changed` is reachable that way, tools can be silently added to the client's catalog. The fix isn't just protecting the session ID from leaking, it's never sharing a session-keyed queue across servers without per-user scoping, verifying authorization on every request rather than trusting the session ID alone, and rotating sessions.
 
-Mid: "You find a garden-variety XSS in the MCP client's web UI, say through the OAuth authorization-URL bug. How bad is that, realistically?"
+**You find a garden-variety XSS in the MCP client's web UI, say through the OAuth authorization-URL bug. How bad is that, realistically?**
+
+Mid: It's a real bug (an attacker could steal session data or manipulate the page), but it's a standard client-side XSS, contained to whatever a browser tab can normally do.
 
 Principal: In a proxy architecture, it can escalate to full host RCE, not stay a contained web bug. If a local proxy service manages stdio connections and spawns MCP servers as child processes, an XSS in the client can exfiltrate the proxy's auth token, then use it to make authenticated requests to the proxy, which spawns arbitrary commands through stdio on the attacker's behalf. A bug that would normally be scoped to cookie theft or DOM manipulation in a browser tab escalates to spawning processes on the host, because the proxy trusts anything holding its token to request a server spawn. The mitigations compound: validate authorization URLs so the XSS can't happen in the first place, apply CSP, and separately have the proxy sandbox spawned processes and require additional authorization for dangerous commands, so a successful XSS still doesn't automatically become RCE.
 

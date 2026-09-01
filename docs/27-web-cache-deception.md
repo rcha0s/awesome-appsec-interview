@@ -199,19 +199,27 @@ Once the victim's browser populates the cache entry, the attacker has until the 
 - Mid: A phishing link or an embedded `<img>` or `<link>` on an attacker page, then fetch it within the cache TTL.
 - Principal: Delivery is any primitive that causes the victim's browser to make a same-origin GET while authenticated: a phishing link (top-level navigation), an `<img src>` or `<link rel=stylesheet href>` on an attacker page, an open redirect on the target, or any HTML injection sink that emits a single tag. `SameSite` on the session cookie decides which of these work: `Lax` (the modern default) still rides top-level navigations so the phishing-link vector remains viable, but blocks cross-site subresource loads so `<img>` and `<link>` embeds fail; `Strict` breaks all cross-site delivery and leaves only same-site vectors such as an on-site open redirect or stored injection; `None; Secure` allows every vector. Once the entry is populated the attacker has until the CDN's TTL expires, which is typically minutes to hours for static-extension rules and often days for aggressively cached assets, and the attacker can re-lure to keep the entry warm indefinitely. In an interview, if the target is described as using `SameSite=Strict`, pivot to same-site delivery (open redirect, injection) rather than claim the attack is dead.
 
-Mid: "How is web cache deception actually different from web cache poisoning? Both involve a cache going wrong."
+**How is web cache deception actually different from web cache poisoning? Both involve a cache going wrong.**
+
+Mid: Poisoning tricks the cache into serving malicious content that many users then receive, while deception tricks the cache into storing one victim's own private response that the attacker then reads back.
 
 Principal: They're mirror images of the same underlying mechanism, a mismatch between what the cache keys on and what the origin actually does, but the exploit direction and victim model invert. Poisoning uses an unkeyed input reaching a response-affecting sink to push attacker-chosen content into the cache, and it has many victims per poisoned URL, anyone whose keyed request later matches. Deception uses a cache-rule-versus-origin-routing mismatch to pull one specific victim's private, authenticated response into a cache entry the attacker can fetch unauthenticated, and it has exactly one victim per exploited URL. Deception needs no unkeyed input at all; poisoning is impossible without one. If a candidate conflates the two, that's the tell they haven't internalized the key-versus-response-generation model.
 
-Mid: "A dynamic, authenticated endpoint is served with `Cache-Control: no-cache`. Is that sufficient to prevent WCD?"
+**A dynamic, authenticated endpoint is served with `Cache-Control: no-cache`. Is that sufficient to prevent WCD?**
+
+Mid: No. Despite the name, `no-cache` still lets the response be stored, it just forces revalidation with the origin before reuse; `no-store` is the directive that actually blocks storage.
 
 Principal: No, and this is a common trap because `no-cache` sounds like it means "don't cache." It doesn't: it still permits storage, it just requires revalidation with the origin before serving the stored copy, which does nothing to stop a cache tier that decides cacheability by URL extension rather than by honoring revalidation semantics correctly. `no-store` is the directive that forbids storage outright, and `private` additionally forbids shared-cache storage specifically. The correct header on every dynamic or authenticated response is `Cache-Control: no-store, private`, not `no-cache`.
 
-Mid: "You've confirmed a WCD delimiter bug on one endpoint using `;` as a Spring matrix-variable delimiter. How far does that finding travel across the rest of the app?"
+**You've confirmed a WCD delimiter bug on one endpoint using `;` as a Spring matrix-variable delimiter. How far does that finding travel across the rest of the app?**
+
+Mid: Since `;` truncation is a framework-level parsing behavior rather than something a single route configures, it likely applies to every endpoint on that Spring app, not just the one tested.
 
 Principal: Depends which family of discrepancy it is, and that distinction is what separates someone who has actually run this attack from someone reciting the taxonomy. Path-mapping discrepancies are endpoint-specific: whether a trailing segment is treated as an insignificant parameter depends on that specific route's abstraction rule, so a confirmed finding on `/account/profile` says nothing about `/api/orders/:id`. Delimiter and normalization discrepancies are framework-wide instead, because the framework applies the same parsing rule everywhere it routes: if `;` truncates the path on one Spring endpoint, it truncates on essentially all of them. That makes a confirmed delimiter finding far more valuable to chase first, since one working payload becomes a mass scan rather than a one-off.
 
-Mid: "Whose bug is this, really, the cache's or the origin's?"
+**Whose bug is this, really, the cache's or the origin's?**
+
+Mid: Neither on its own. Each side is behaving as designed, the vulnerability is that the cache and the origin parse the same URL differently.
 
 Principal: Neither one in isolation, which is why single-product patches are often incomplete fixes. Both the cache and the origin are behaving correctly according to their own parsing and routing rules; the vulnerability is the gap between two internally-consistent but mutually-divergent parsers. Patching only the origin's router, or only tightening the CDN's static-file rule, closes the specific instance you found without closing the class. The durable fix either aligns normalization, decoding, and delimiter handling across both tiers so no discrepancy can exist, or removes the precondition entirely with `no-store` on dynamic responses and Content-Type verification on the cache, which defeats the whole family regardless of how the two parsers disagree.
 

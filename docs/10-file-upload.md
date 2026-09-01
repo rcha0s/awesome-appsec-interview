@@ -194,31 +194,45 @@ Reference: OWASP File Upload Cheat Sheet<sup>[[2]](#ref2)</sup>, OWASP Web Secur
 
 ## Interviewer probes
 
-Mid: "The upload endpoint checks that the file's Content-Type is `image/jpeg` and rejects anything else. Is that sufficient validation?"
+**The upload endpoint checks that the file's Content-Type is `image/jpeg` and rejects anything else. Is that sufficient validation?**
+
+Mid: No. `Content-Type` is a client-supplied multipart header, so an attacker can just set it to `image/jpeg` on a malicious file; the server needs to check the actual file content, not the declared type.
 
 Principal: No, that's the weakest possible check. The per-part `Content-Type` is a client-set multipart header, spoofed by changing one field in the request. Checking the extension is `.jpg` is only slightly better, since polyglots and double extensions combined with a loose Apache handler defeat that too. The senior answer doesn't lead with validation at all; it leads with making the storage location non-executable and serving content inert, then treats extension and content checks as defense-in-depth layered on top.
 
-Mid: "You've confirmed the app accepts a `.php` file with a spoofed image Content-Type. Is that RCE?"
+**You've confirmed the app accepts a `.php` file with a spoofed image Content-Type. Is that RCE?**
+
+Mid: Not automatically. It's only RCE if the upload directory is actually configured to execute `.php` files; otherwise the upload just sits there as an inert stored file.
 
 Principal: Not necessarily, and that's the part people skip. Upload-to-RCE needs two things true at once: the extension has to be one the server recognizes as executable, and the file has to land in a directory the server is actually configured to execute scripts from. An accepted `.php` upload into a directory with execution disabled, or outside the webroot entirely, is a stored file, not RCE. You have to check the directory's handler configuration, not just what extensions get past the filter.
 
-Mid: "The app already restricts uploads to image types, including SVG since it's technically a vector image format. Any concern there?"
+**The app already restricts uploads to image types, including SVG since it's technically a vector image format. Any concern there?**
+
+Mid: Yes. SVG files can contain embedded `<script>` or event-handler JavaScript, so allowing SVG uploads risks stored XSS if the file is ever rendered inline.
 
 Principal: Yes, SVG shouldn't be on that allowlist without extra handling. It's XML, not a raster image, so it's both a stored-XSS vector when rendered inline on the same origin, and an XXE vector when parsed server-side. Teams that whitelist "images" and let SVG through the same path as JPEG/PNG have handed themselves a live XSS/XXE sink. The same applies to DOCX/XLSX/XML uploads for the same underlying reason, they're all parsed document formats, not opaque binary blobs.
 
-Mid: "The extension allowlist is tight, it only permits `.jpg`, `.png`, and `.pdf`. Does that close out the upload risk?"
+**The extension allowlist is tight, it only permits `.jpg`, `.png`, and `.pdf`. Does that close out the upload risk?**
+
+Mid: It closes off most of the executable-upload risk since none of those extensions run server-side code, but I'd still want to confirm the actual file content matches the extension before trusting it.
 
 Principal: It closes the executable-extension risk, but not the whole class. Even a perfect allowlist doesn't stop the dangerous-without-RCE category, XXE through a parsed PDF, or Zip Slip if any of those formats get extracted server-side. Allowlisting beats blocklisting because you enumerate the few safe types instead of the infinite dangerous ones, but it's one layer; storage and serving controls have to hold up independently of what the extension filter catches.
 
-Mid: "What's the single highest-leverage change you'd make to an upload pipeline that currently trusts the user-supplied filename?"
+**What's the single highest-leverage change you'd make to an upload pipeline that currently trusts the user-supplied filename?**
+
+Mid: Rename the file to a generated ID when saving it, instead of writing it out under the user-supplied name, so traversal characters in the filename can't affect where it lands.
 
 Principal: Stop using it. Generate a random identifier for storage and keep the original filename only as display metadata, never as anything that touches a filesystem path. That one change removes path traversal, overwrite, null-byte tricks, and double-extension tricks simultaneously, because none of those attacks work if the attacker's string never reaches a save path. Candidates who only talk about extension filtering are missing that the filename itself is attacker-controlled data being used to make a filesystem decision.
 
-Mid: "You found a Zip Slip issue in the file upload feature. Is that the same bug as the path traversal you found in the filename field?"
+**You found a Zip Slip issue in the file upload feature. Is that the same bug as the path traversal you found in the filename field?**
+
+Mid: They're both path traversal at heart, so the fix is the same idea: sanitize the path before writing, whether it comes from the upload's filename or from an entry name inside an uploaded archive.
 
 Principal: Related root cause, different sink. Generic filename traversal happens on the upload request's filename parameter; Zip Slip happens on entry names inside an archive the user uploaded, exploited during extraction, not during the upload itself. Both are CWE-22 in spirit, but the fix location differs: Zip Slip needs canonicalize-and-prefix-check applied per archive entry plus decompression limits, independent of whatever filename validation exists on the upload endpoint. Treating them as the same finding with the same fix is a tell that the traversal mechanism wasn't actually understood.
 
-Mid: "Say you've locked down storage location and execution. What's left to worry about on the serving side?"
+**Say you've locked down storage location and execution. What's left to worry about on the serving side?**
+
+Mid: You'd still want to make sure the browser doesn't render an uploaded file as something dangerous, serving it with the correct `Content-Type` so an "image" can't get interpreted as HTML.
 
 Principal: Content-sniffing on the response. Even a non-executable, correctly-stored file can become an XSS vector if the browser sniffs an uploaded "image" as HTML or JavaScript and renders it. The trifecta that closes that off is `X-Content-Type-Options: nosniff` to stop MIME sniffing, `Content-Disposition: attachment` to force a download instead of inline rendering, and serving user content from a separate origin so that even a successful stored-XSS file can't reach the main app's cookies or DOM. Naming only one of the three, and not explaining why each piece matters, is the usual gap.
 

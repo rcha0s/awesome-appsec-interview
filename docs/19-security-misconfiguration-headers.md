@@ -140,35 +140,51 @@ Ordered by leverage within each group. The header suite is table stakes, but dis
 
 ## Interviewer probes
 
-Mid: "You've added a strict CSP and SameSite cookies. Does that mean XSS and CSRF are fixed?"
+**You've added a strict CSP and SameSite cookies. Does that mean XSS and CSRF are fixed?**
+
+Mid: Mostly. CSP blocks injected scripts from executing and SameSite stops the session cookie from being sent on cross-site requests, so both attack classes are largely closed off.
 
 Principal: No, and claiming a header "fixes" either bug is the tell of a shallow answer. CSP mitigates XSS by constraining what an injected script can do, but the real fix is contextual output encoding at the point data is rendered; CSP is the safety net for when encoding is missed somewhere. SameSite mitigates CSRF by withholding the cookie on cross-site requests, but the primary fix is still anti-CSRF tokens on state-changing endpoints, because SameSite has gaps (same-site isn't same-origin, and `Lax` still allows top-level GET navigations). A strong answer names both layers, the header and the actual fix underneath it, and doesn't stop at the header.
 
-Mid: "We just added HSTS with preload. Are we now protected against SSL-stripping on every visit?"
+**We just added HSTS with preload. Are we now protected against SSL-stripping on every visit?**
+
+Mid: Yes. HSTS tells the browser to only connect over HTTPS from now on, so once the header has been set, subsequent requests are protected from downgrade attacks.
 
 Principal: Not the very first one. HSTS only kicks in once the browser has seen the header at least once over HTTPS, so a user's first-ever connection to your domain is still vulnerable to a downgrade before that header ever arrives, unless you've submitted the domain to the HSTS preload list baked into browsers themselves. And `preload` is close to irreversible in practice: once you're in browser preload lists, getting removed takes a long time and affects every subdomain under `includeSubDomains`, so it's a durable commitment to HTTPS everywhere, not a quick toggle you flip and walk back.
 
-Mid: "Should we set `X-XSS-Protection: 1` to enable the browser's built-in XSS filter?"
+**Should we set `X-XSS-Protection: 1` to enable the browser's built-in XSS filter?**
+
+Mid: No, that header is deprecated in modern browsers, so it's best left off and CSP relied on as the actual XSS defense instead.
 
 Principal: No, that instinct is backwards. The legacy `X-XSS-Protection` auditor is deprecated in modern browsers and has itself been implicated in vulnerabilities, its filtering behavior could in some cases be abused to infer page content. The correct setting is `X-XSS-Protection: 0`, explicitly disabling it, and relying on CSP as the actual mitigation layer. A candidate who reflexively wants to "turn on" a security-sounding header without knowing what it currently does is exactly the gap this question is designed to surface.
 
-Mid: "The response has `Cache-Control: no-cache` on a page with sensitive account data. Is that sufficient?"
+**The response has `Cache-Control: no-cache` on a page with sensitive account data. Is that sufficient?**
+
+Mid: No, `no-cache` just forces revalidation with the server before a cached copy is reused, it doesn't prevent storage; `no-store` is the directive that actually blocks caching.
 
 Principal: No, and that's a common mix-up. `no-cache` does not mean "do not cache," it means "revalidate with the server before reusing a cached copy," so the sensitive response can still sit in a cache or browser history, it just can't be served again without a round-trip check. `no-store` is the directive that actually forbids storage entirely, which is what you want for anything sensitive. Confusing the two leaves a sensitive response sitting somewhere it can potentially be retrieved from, cache or disk, even though the name "no-cache" sounds like the stricter option.
 
-Mid: "What actually stops an attacker on a subdomain, or an on-path HTTP attacker, from overwriting our session cookie?"
+**What actually stops an attacker on a subdomain, or an on-path HTTP attacker, from overwriting our session cookie?**
+
+Mid: The `__Host-` cookie prefix, which requires `Secure`, no `Domain` attribute, and `Path=/`, keeping the cookie locked to the exact host and off plain HTTP.
 
 Principal: The `__Host-` cookie prefix, and it's worth being precise about why it works: this is browser-enforced integrity, not obscurity. A browser only accepts a `Set-Cookie` with the `__Host-` prefix if it carries `Secure`, has no `Domain` attribute at all (so it's locked to the exact host, never shared to subdomains), and `Path=/`. Any `Set-Cookie` claiming that prefix without meeting all three is rejected outright by the browser itself, which is what stops cookie tossing from a compromised or malicious subdomain, or fixation from a network attacker sitting on plain HTTP. The security guarantee comes from browser enforcement of the naming convention, not from the name being hard to guess.
 
-Mid: "The Actuator endpoint and the debug console are only reachable from our internal network. Is that acceptable in production?"
+**The Actuator endpoint and the debug console are only reachable from our internal network. Is that acceptable in production?**
+
+Mid: Not really. Network placement helps, but these endpoints can expose secrets or code execution, so they should still require authentication rather than relying on internal-only reachability.
 
 Principal: No, "it's internal" is not a control on its own. Werkzeug and Django/Flask debug consoles are remote code execution, not just information disclosure, and actuator endpoints like `/heapdump` can leak in-memory secrets and session tokens outright. Internal-only placement is routinely defeated by SSRF (the app itself becomes the internal caller), request misrouting, or a single misconfigured ingress rule, any of which hands an external attacker a path to something that was only ever supposed to be reachable from inside. Debug and management surfaces get disabled or authenticated in production regardless of where they sit on the network, because network placement is not the security boundary people assume it is.
 
-Mid: "A stack trace leaked a dependency version and an internal file path, but no credentials. Is that a real finding?"
+**A stack trace leaked a dependency version and an internal file path, but no credentials. Is that a real finding?**
+
+Mid: Yes, it should still be reported. Version and path disclosure gives attackers useful reconnaissance even without a direct credential leak.
 
 Principal: Yes, treat it as one, not as noise. An informative error is a partial exploit: the version string lets an attacker match it against known CVEs directly, and the internal path or SQL fragment tells them exactly what technology and structure they're up against, accelerating whatever comes next. It's not the whole breach, but it's the reconnaissance step that makes the rest of the attack faster and more targeted, which is exactly why generic error pages paired with detailed server-side logging, not "no credentials leaked, so we're fine", is the correct pattern.
 
-Mid: "Our security-headers scan against the homepage came back clean. Are we covered everywhere?"
+**Our security-headers scan against the homepage came back clean. Are we covered everywhere?**
+
+Mid: Not necessarily. Headers can still be missing on other routes, error pages, or redirects even though the homepage looks clean, so other paths are worth spot-checking too.
 
 Principal: Only if you actually verified every response, not just the happy path on origin. A header set only via an nginx `add_header` without `always`, or an Apache directive scoped to `onsuccess` rather than `always`, silently disappears on error and redirect responses, leaving exactly the pages an attacker is most likely to interact with unprotected. CDNs and reverse proxies compound this: they can strip or override headers between your origin and the browser, so a header present at origin isn't proof it reaches the client. Verify at the actual edge the browser sees, across 200s, 4xx, 5xx, and redirects, not just a single scan of the homepage.
 

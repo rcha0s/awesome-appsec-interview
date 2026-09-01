@@ -311,27 +311,39 @@ Content-Security-Policy: script-src 'nonce-r4nd0m' 'strict-dynamic'; object-src 
 
 ## Interviewer probes
 
-Mid: "If we validate input strictly on the way in, doesn't that stop XSS?"
+**If we validate input strictly on the way in, doesn't that stop XSS?**
+
+Mid: Not on its own. You still need to encode output for the context it's rendered into, since input validation alone can't catch every way a value ends up executed.
 
 Principal: No. Input validation is defense-in-depth, not the fix. Contextual output encoding is the fix, because plenty of legitimate values legitimately contain `<` or `"` (a math forum, a code snippet field, an address with an ampersand), so you can't reject your way to safety without breaking real input. The bug is that the output was placed into a parser context without the encoding that context requires; validation on the way in doesn't touch that.
 
-Mid: "The session cookie is HttpOnly, so we're protected against XSS, right?"
+**The session cookie is HttpOnly, so we're protected against XSS, right?**
+
+Mid: Not fully. HttpOnly only stops JavaScript from reading the cookie's value, it doesn't stop injected script from making authenticated requests as that user.
 
 Principal: HttpOnly stops `document.cookie` reads, nothing else. The attacker's script still executes in the page and can call `fetch('/admin/deleteUser', {credentials: 'include'})`, which rides on the cookie automatically without ever reading it. Once script runs in the origin, the attacker has the user's full authenticated capability, cookie theft is just one of many things they could do with it.
 
-Mid: "We use React, so we're not exposed to XSS, correct?"
+**We use React, so we're not exposed to XSS, correct?**
+
+Mid: Mostly. React auto-escapes values rendered as JSX text or attributes, but that protection doesn't cover things like `dangerouslySetInnerHTML` or manual DOM manipulation.
 
 Principal: Only until someone reaches for `dangerouslySetInnerHTML`, puts unvalidated input into an `href` (React does not sanitize the `javascript:` scheme), or touches the raw DOM through a `ref` callback. Every framework's auto-escaping covers the common path and leaves the escape hatches uncovered, which is exactly why those hatches need a lint rule and a security sign-off rather than an assumption of safety.
 
-Mid: "We HTML-encode all user input before rendering it, so we should be covered everywhere it appears?"
+**We HTML-encode all user input before rendering it, so we should be covered everywhere it appears?**
+
+Mid: Not necessarily. HTML encoding protects the normal page body and attribute contexts, but the same value might also get output inside a script block or a URL, where HTML encoding doesn't apply.
 
 Principal: Encoding the same way everywhere is itself the bug. HTML-encoding a value that lands inside a `<script>` block or inside a `javascript:` URL does nothing, because the JS parser never HTML-decodes and the URL parser doesn't either. The fix has to be context-specific: HTML entity encoding in body/attribute contexts, JS `\uXXXX` escaping in script string literals, URL percent-encoding in URL parameters. One encoder applied everywhere is the most common false-safety bug in this space.
 
-Mid: "We found a self-XSS where a user can only inject script into their own session, so it's not really exploitable, right?"
+**We found a self-XSS where a user can only inject script into their own session, so it's not really exploitable, right?**
+
+Mid: It's lower risk on its own since it only affects the person who triggers it, but it should still be fixed rather than dismissed, since there may be other ways to get it to run in someone else's session.
 
 Principal: Self-XSS is a delivery problem, not a severity ceiling. If the action that stores the payload lacks CSRF protection, the attacker forges a request that plants their payload into the victim's account, turning it into stored XSS firing in someone else's session. Login CSRF does the same thing by force-logging the victim into an attacker-controlled account that already holds the payload. Rate the finding by what it becomes once delivery is solved, not by today's delivery constraint.
 
-Mid: "We have a WAF in front of the app, does that cover our XSS risk?"
+**We have a WAF in front of the app, does that cover our XSS risk?**
+
+Mid: It helps block some known attack patterns, but a WAF is a supplementary filter, not a substitute for proper output encoding, and it can be bypassed.
 
 Principal: Not for DOM-based XSS, which the WAF never sees, because the payload can live entirely client-side in `location.hash` and never touch the network. Server-reflected and stored XSS payloads sent through a WAF are also routinely evaded through the same kind of context confusion that defeats blocklists everywhere else. A WAF is a speed bump for unsophisticated scanners, not a control you can rely on for this class.
 

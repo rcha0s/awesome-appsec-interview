@@ -236,27 +236,39 @@ Ordered by impact and mapped to OWASP API Top 10 2023.<sup>[[8]](#ref8)</sup>
 
 ## Interviewer probes
 
-Mid: "Why does the OWASP API Top 10 lead with authorization failures instead of injection?"
+**Why does the OWASP API Top 10 lead with authorization failures instead of injection?**
+
+Mid: Injection is mostly caught now because parameterized queries and ORMs handle it automatically, but authorization has to be coded by hand on every endpoint, so it gets missed more often.
 
 Principal: A REST API is a wide, uniform grid of id-handling endpoints, and each cell needs its own explicit authorization decision that the framework cannot make for you: it has to know the ownership graph. Injection is a value-handling bug with mature, largely automatic framework defenses (parameterized queries, ORMs), so it gets caught. Broken authorization is a business-logic decision, easy to skip because authentication succeeding "feels like" enough. Three of the top five API risks, API1 (BOLA), API3 (BOPLA), and API5 (BFLA), are all authorization, which is why "does this endpoint check ownership" is the first question worth asking about any API finding.
 
-Mid: "Walk me through the difference between BOLA, BFLA, and BOPLA."
+**Walk me through the difference between BOLA, BFLA, and BOPLA.**
+
+Mid: BOLA is reaching another user's object by changing an id, BFLA is calling a function or admin route your role shouldn't be allowed to call, and BOPLA is reading or setting object properties you shouldn't have access to, like a hidden field on read or an `isAdmin` flag on write.
 
 Principal: BOLA is accessing the wrong object through a function you're otherwise allowed to call, horizontal escalation: "give me order 1005" when you own order 1004. BFLA is invoking a function your role shouldn't have at all, vertical escalation: calling the admin-only delete endpoint as a regular user. BOPLA is a property-level gap inside an object or function you are allowed to touch: excessive data exposure on read (the endpoint serializes fields the UI never shows), and mass assignment on write (the endpoint binds a property, like `isAdmin`, that the caller should never be able to set). All three exist because REST gives you no automatic enforcement of any of them; the endpoint code has to do it explicitly every time.
 
-Mid: "A team says mass assignment isn't a risk because their framework's auto-binding is 'just a productivity feature.' How do you respond?"
+**A team says mass assignment isn't a risk because their framework's auto-binding is 'just a productivity feature.' How do you respond?**
+
+Mid: Auto-binding maps every key in the JSON body straight onto the model's fields, so if a sensitive column like `isAdmin` exists on that model, an attacker can just add it to the request and set it; the fix is to allowlist which fields each endpoint is allowed to bind.
 
 Principal: That productivity feature is exactly the vulnerability. Auto-binding takes every key in the request body and writes it straight to model fields, so if the model has an `isAdmin` or `role` column, sending that key in the JSON body sets it, whether or not the endpoint's UI ever exposes that field. The fix is an allowlist, DTOs or serializers that name the exact properties a given endpoint may write, not a blocklist that has to remember to list every sensitive field and will eventually miss one added later. This is the same class of bug behind the 2012 GitHub Rails incident: a public form bound more fields than the developer intended to expose.
 
-Mid: "API6, unrestricted access to sensitive business flows, doesn't look like the others on this list. Why is it even in the Top 10?"
+**API6, unrestricted access to sensitive business flows, doesn't look like the others on this list. Why is it even in the Top 10?**
+
+Mid: It's about a legitimate feature, like checkout or a referral program, being abused at scale by bots or scripts rather than a coding flaw, so it needs defenses like rate limiting, CAPTCHAs, and bot detection instead of a patch.
 
 Principal: Because it's a design risk, not a code bug, and that distinction matters for how you defend it. There's often no single vulnerable line: the checkout endpoint, the booking endpoint, and the referral endpoint are all working exactly as designed. The question is whether a human-intended flow can be weaponized by automation at a scale or speed a human couldn't achieve, a scalper scripting checkout, a user booking 90% of a flight's seats to force a fire sale. Because there's no code fix, the defense is business-plus-engineering: identify which flows are harmful if automated, then add friction, fingerprinting, CAPTCHA, human-pattern analysis, none of which eliminate the ability to automate the flow, they just raise the cost enough that it stops being profitable.
 
-Mid: "You find a forgotten `/v1` endpoint still running in production next to a hardened `/v2`. How serious is that, really?"
+**You find a forgotten `/v1` endpoint still running in production next to a hardened `/v2`. How serious is that, really?**
+
+Mid: It's worth fixing because the old version probably never got the security patches and hardening that shipped to `/v2`, so it should be added to the inventory and either patched to match or decommissioned.
 
 Principal: It's often the actual attack surface, not a footnote. Improper inventory management (API9) is the shadow-API problem: a fix shipped to `/v2`, an auth check added, a rate limit tightened, routinely never gets backported to the old version because nobody remembers it's still reachable. Breaches happen through exactly this gap, an old version, a staging host, a debug endpoint someone forgot to tear down. The defense is treating inventory and deprecation as security controls in their own right: a live inventory of every host, environment, and version, with protections applied to all of them, not just the one currently linked from the docs. The weakest version you're still serving defines your real security posture, not the one you patched.
 
-Mid: "Where should authorization actually live: the gateway, the service layer, or the database?"
+**Where should authorization actually live: the gateway, the service layer, or the database?**
+
+Mid: Mostly in the service layer, where the endpoint code checks that the caller owns the object being accessed; the gateway handles authentication and rate limiting, but it doesn't have enough context to make object-level decisions.
 
 Principal: All three, doing different jobs, and conflating them is the tell of a shallow answer. The gateway can enforce coarse checks, is the caller authenticated, does the token carry the right scope, are they within rate limits, but it cannot make an object-level decision because it doesn't have the ownership graph, and duplicating that graph at the edge just creates a second copy that goes stale. Object- and function-level authorization belongs in the service layer, a central deny-by-default policy component invoked at every handler, because that's where the ownership model actually lives. Data-layer enforcement, Postgres row-level security, `WHERE owner_id = :principal` on every query, is the deepest defense in depth: it survives a handler bug, an ORM misuse, or a future endpoint someone writes without remembering the check. The staff-level answer uses all four layers together: coarse checks at the gateway, deny-by-default policy at the service, tenant scoping in the database, and property-level allowlists in the serializer, because each one covers a failure mode the others don't.
 

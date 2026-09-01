@@ -222,31 +222,45 @@ Blocklists model syntax, not the data/code boundary, so they lose to any transfo
 
 ## Interviewer probes
 
-Mid: "Doesn't escaping quotes fix SQL injection?"
+**Doesn't escaping quotes fix SQL injection?**
+
+Mid: Escaping helps but isn't a complete fix, since it's easy to miss a context or a DBMS-specific edge case; parameterized queries are the recommended approach because they don't rely on catching every dangerous character.
 
 Principal: No. Numeric contexts have no quote to escape, so `id=1 OR 1=1` needs none at all. Second-order injection stores an already-escaped value that gets un-escaped on the later read, defeating the escaping that ran at write time. Multibyte charset tricks (the classic GBK `%bf%27`) can consume the escape backslash itself. Parameterization is the real fix precisely because it doesn't depend on catching characters; the value never reaches the parser as SQL text in the first place.
 
-Mid: "We use an ORM, so we're not exposed to SQL injection, right?"
+**We use an ORM, so we're not exposed to SQL injection, right?**
+
+Mid: Mostly, but not entirely. The ORM's query builder is safe, but any raw or native query method it exposes can still be injectable if it's built with string concatenation.
 
 Principal: Only until someone reaches for the raw-query escape hatch or builds `ORDER BY` from a request parameter. Django `.raw()`/`.extra()`, SQLAlchemy `text()` with f-strings, Sequelize `sequelize.query()`, and Rails `where("name = '#{x}'")` all reintroduce the class with no compiler warning. ORMs also cannot bind identifiers or sort direction, so those still need an explicit allowlist regardless of ORM usage.
 
-Mid: "If we move all data access into stored procedures, are we safe from SQL injection?"
+**If we move all data access into stored procedures, are we safe from SQL injection?**
+
+Mid: Not automatically. It depends on how the procedure is written; if it concatenates input into a dynamic SQL string internally, it can still be injectable.
 
 Principal: Only if the procedure body itself uses bound parameters. A procedure that builds dynamic SQL internally with `EXEC`/`sp_executesql`/`EXECUTE IMMEDIATE` over concatenated input is injection one layer down, just harder to spot in review because the vulnerable string-building is now inside the database rather than the app. Stored procedures are architecturally equivalent to parameterized queries when written correctly, not inherently safer.
 
-Mid: "Since we use parameterized queries everywhere, are all our SQL injection risks closed?"
+**Since we use parameterized queries everywhere, are all our SQL injection risks closed?**
+
+Mid: Mostly, but things like table/column names or sort direction can't be passed as bind parameters, so any place that builds those dynamically still needs to be checked.
 
 Principal: Not the ones that can't be parameterized. `ORDER BY` direction, `LIMIT`/`TOP` values, and identifiers (table and column names) cannot be bound as parameters in standard drivers. A senior answer names the server-side allowlist mapping for those positions rather than claiming binds cover everything; that gap is exactly where reviewers still find real injection in codebases that otherwise parameterize correctly.
 
-Mid: "If a SQL injection is blind and never reflects data, is it lower severity than an in-band one?"
+**If a SQL injection is blind and never reflects data, is it lower severity than an in-band one?**
+
+Mid: It's harder to exploit since there's no direct output to read from, but it can still be used to extract data one bit at a time, so it shouldn't be rated lower just because it's blind.
 
 Principal: No, only slower to exploit manually, and automation (sqlmap-style binary search) makes that difference cosmetic. A blind boolean or time-based injection reaches the same data and the same escalation paths (stacked queries, `xp_cmdshell`, `COPY ... PROGRAM`) as a UNION-based one; don't downgrade a finding just because the response doesn't visibly change.
 
-Mid: "We use prepared statements everywhere, so we're covered on data access, right?"
+**We use prepared statements everywhere, so we're covered on data access, right?**
+
+Mid: Prepared statements cover injection, but you still need separate authorization checks in the query or application logic to make sure a user can only access their own data.
 
 Principal: Prepared statements defend against injection, not against a query that is logically over-privileged. Authorization is a separate control: a fully parameterized query with no tenant or owner predicate in the `WHERE` clause can still return another user's rows on demand. Interviewers ask this specifically to see whether a candidate conflates "the query is syntactically safe" with "the query is correctly scoped to the caller."
 
-Mid: "Does SQL injection have an equivalent in NoSQL databases?"
+**Does SQL injection have an equivalent in NoSQL databases?**
+
+Mid: Yes, it's usually called NoSQL injection: passing JSON operators like `$ne` or `$gt` instead of a plain value can change what the query matches.
 
 Principal: Yes, same data-into-code root cause with different syntax: operator injection like `{"$ne": ""}` or `{"$gt": ""}` in a JSON body reshapes the query logic, and `$where` allows arbitrary JavaScript evaluation on some engines. The fix rhymes with the relational case: keep user data out of the query structure, and reject query operators when a value position is expected.
 
