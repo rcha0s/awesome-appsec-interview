@@ -65,7 +65,7 @@ flowchart LR
   Decode -->|SSE / gRPC stream| Client
   subgraph Admin
     Repo[/v2/repository or /admin/]
-    Info[/info /metrics /health]
+    Info[/info /metrics /health/]
   end
   Router -. often same port .-> Admin
   Disk[(Model Store: S3, NFS, PVC)] --> GPU

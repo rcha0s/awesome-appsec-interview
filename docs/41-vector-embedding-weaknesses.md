@@ -52,7 +52,7 @@ sequenceDiagram
     App->>Emb: embed(query) [cache lookup, side channel here]
     Emb-->>App: q vec [1536]
     App->>Idx: ANN(q, top_k=5, filter=?) [tenant filter must be server-authored]
-    Idx-->>App: chunks[] [each has text + metadata; attacker doc rides here]
+    Idx-->>App: chunks[] [each has text + metadata, attacker doc rides here]
     App->>App: rerank(query, chunks)  [cross-encoder, adversarial-suffix surface]
     App->>LLM: system + retrieved(chunks) + user(query)
     Note over LLM: Chunk text is treated as instructions if template lacks role separation
