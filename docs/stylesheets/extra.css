@@ -30,6 +30,17 @@ body[data-md-color-scheme="slate"] .mermaid-diagram {
   color-scheme: only dark;
 }
 
+/* The top nav tab bar now has 11 top-level sections and overflows its
+   container at essentially every desktop width (confirmed: scrollWidth >
+   clientWidth from ~1220px up), scrolling horizontally via a native
+   overflow-x scrollbar with no visual cue that there's more to the right.
+   Fade both edges so an overflowing list visibly signals "scroll for
+   more" instead of silently truncating. */
+.md-tabs__list {
+  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+}
+
 /* Diagram presentation. Colors themselves come from mermaid-theme.mjs;
    this just gives rendered diagrams a card treatment consistent with the
    rest of the site and keeps wide sequence diagrams from breaking layout
