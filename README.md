@@ -30,6 +30,7 @@ One exception to the shape above: the **Architectural controls** docs (first sec
 | 100 | [Audit Logging and Non-repudiation](docs/100-audit-logging.md) | Core | What must be logged, tamper-evidence, keeping sensitive data out of the log while auditing access to it, break-glass review |
 | 101 | [Session Management](docs/101-session-management.md) | Core | Where the continuity proof lives per surface and how it's actually revoked, deeper than Authentication's brief treatment |
 | 102 | [Multi-Tenancy and Isolation](docs/102-multi-tenancy-isolation.md) | Core | Why application-layer tenant checks fail silently and data-layer isolation (RLS, per-tenant schemas, vector-store scoping) fails loudly instead |
+| 103 | [File Upload and Storage Security](docs/103-file-upload-storage-security.md) | Common | Where a stored object lives and who can reach it, forked by public/private/system-generated: presigned URLs vs authenticated proxies, envelope encryption, tenant isolation, SSRF in generation/import pipelines |
 
 ### Server-side and injection
 
