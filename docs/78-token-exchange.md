@@ -6,6 +6,8 @@
 
 *See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
 
+*See also: [Authorization](97-authorization.md) for the PDP/PEP model behind the actor-authorized-to-act-for-subject check this doc's exchange grant depends on, and [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the credential escalation ladder governing how the resulting downstream tokens should be stored.*
+
 ## Quick reference
 
 ```http

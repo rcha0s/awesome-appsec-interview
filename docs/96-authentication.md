@@ -4,6 +4,8 @@
 
 **Interview frequency:** Core
 
+*See also: [Authorization](97-authorization.md) for what a proven identity is then allowed to do, [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the credential-custody decisions behind service-to-service authentication, and [Session Management](101-session-management.md) for a deeper look at the continuity layer this doc only sketches per context.*
+
 ## Where this decision forks
 
 Deployment surface is the axis, not industry or application type, because the surface determines which trust anchors and storage primitives are even available. A team that applies one context's answer everywhere, session cookies for a mobile API, a shared static secret between microservices, is usually reproducing a web-shaped or service-shaped default in the wrong context rather than choosing deliberately.

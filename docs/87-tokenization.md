@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the KEK and HSM custody model backing the vault's token-to-PAN mapping, [Privacy Engineering and Data Protection](99-privacy-engineering.md) for data minimization and de-identification principles applied to tokens and residual cardholder metadata, and [Audit Logging and Non-repudiation](100-audit-logging.md) for what the de-tokenization surface must log to stay tamper-evident and support break-glass review.*
+
 ## How it works
 
 ### Vault architecture

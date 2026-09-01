@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Authorization](97-authorization.md) for RBAC and policy-engine design behind API server and admission-control authorization decisions, [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for how Kubernetes Secrets and service account tokens should be custodied and rotated, and [Multi-Tenancy and Isolation](102-multi-tenancy-isolation.md) for the namespace, node, and cluster isolation layers that bound a compromised pod.*
+
 ## How it works
 
 ### Control plane and node components

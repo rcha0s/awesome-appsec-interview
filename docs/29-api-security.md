@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [Authorization](97-authorization.md) for the RBAC/ABAC/ReBAC model families and PDP/PEP placement behind the object, function, and property-level checks this doc requires.*
+
 ## How it works
 
 REST endpoints name a resource; the HTTP method names the action.

@@ -24,6 +24,12 @@ One exception to the shape above: the **Architectural controls** docs (first sec
 | # | Topic | Freq | Focus |
 |---|-------|------|-------|
 | 96 | [Authentication](docs/96-authentication.md) | Core | Design checklist forked by web/mobile/desktop/service-to-service: realistic options, modern defaults, and the sub-feature gaps each drags along (reset, remember-me, MFA recovery, deep-link interception, credential rotation) |
+| 97 | [Authorization](docs/97-authorization.md) | Core | RBAC vs ABAC vs ReBAC, Zanzibar, OPA/Cedar policy engines, PDP/PEP placement, break-glass and policy-drift design considerations |
+| 98 | [Secrets, Keys, and Data Protection](docs/98-secrets-keys-data-protection.md) | Core | The credential escalation ladder, HSM/TPM/TEE, envelope encryption/crypto-shredding, and the bearer-vs-proof-of-possession axis that decides when eliminating a secret beats storing it better |
+| 99 | [Privacy Engineering and Data Protection](docs/99-privacy-engineering.md) | Common | Data minimization, de-identification (Safe Harbor/Expert Determination/k-anonymity), LINDDUN's linkability/identifiability/inference, consent, retention-vs-deletion |
+| 100 | [Audit Logging and Non-repudiation](docs/100-audit-logging.md) | Core | What must be logged, tamper-evidence, keeping sensitive data out of the log while auditing access to it, break-glass review |
+| 101 | [Session Management](docs/101-session-management.md) | Core | Where the continuity proof lives per surface and how it's actually revoked, deeper than Authentication's brief treatment |
+| 102 | [Multi-Tenancy and Isolation](docs/102-multi-tenancy-isolation.md) | Core | Why application-layer tenant checks fail silently and data-layer isolation (RLS, per-tenant schemas, vector-store scoping) fails loudly instead |
 
 ### Server-side and injection
 

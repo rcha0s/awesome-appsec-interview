@@ -6,6 +6,8 @@
 
 *See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
 
+*See also: [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the HSM/TPM/TEE custody ladder for the private keys these certificates depend on.*
+
 ## Quick reference
 
 ```

@@ -6,6 +6,8 @@
 
 *See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
 
+*See also: [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the credential escalation ladder and HSM/TPM/TEE key-custody options behind JWT signing keys, and [Session Management](101-session-management.md) for how the stateless-revocation problem is solved when a JWT is used as the session bearer.*
+
 ## How it works
 
 A JWS is three base64url segments joined by dots: `header.payload.signature`. Base64url (RFC 4648 section 5) uses `-` and `_` instead of `+` and `/` and strips `=` padding, so the token is URL-safe and header-safe. Only the signature is cryptographic; the header and payload are encoded, not encrypted, and anyone holding the token can read them.

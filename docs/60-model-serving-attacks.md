@@ -4,6 +4,8 @@
 
 **Interview frequency:** Niche
 
+*See also: [Multi-Tenancy and Isolation](102-multi-tenancy-isolation.md) for the data, compute, and application isolation layers that prevent cross-tenant leakage in shared model-serving infrastructure.*
+
 ## Quick reference
 
 Triton Inference Server exposes an unauthenticated model-repository control plane over HTTP. The following request loads an arbitrary model directory from disk into GPU memory on a server that left `--model-control-mode=explicit` enabled without an auth proxy:

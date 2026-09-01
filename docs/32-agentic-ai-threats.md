@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Audit Logging and Non-repudiation](100-audit-logging.md) for the per-tool-call trace logging that reconstructs what an autonomous agent actually did.*
+
 ## Quick reference
 
 ```json
