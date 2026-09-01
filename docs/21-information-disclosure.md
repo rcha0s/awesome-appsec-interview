@@ -6,6 +6,8 @@
 
 *See also: [Privacy Engineering and Data Protection](99-privacy-engineering.md) for data minimization, de-identification, and LINDDUN's linkability and identifiability categories behind many disclosure risks.*
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for metadata/EXIF leakage and predictable object-key enumeration as disclosure vectors specific to stored files.*
+
 ## How it works / Where it arises
 
 PortSwigger groups the origins into three buckets<sup>[[1]](#ref1)</sup>:

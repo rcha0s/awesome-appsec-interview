@@ -6,6 +6,8 @@
 
 *See also: [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the credential escalation ladder and HSM/TPM/TEE-backed key custody underlying these crypto primitives.*
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for applying encryption-at-rest choices to stored files specifically: envelope encryption, per-tenant key scoping, and backup/export encryption parity.*
+
 ## How it works
 
 Cryptography in an application decomposes into a handful of jobs, and most failures are a mismatch between the job and the tool.
