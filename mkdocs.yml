@@ -75,6 +75,12 @@ nav:
   - Architectural Controls:
     - architecture-controls/index.md
     - Authentication: 96-authentication.md
+    - Authorization: 97-authorization.md
+    - Secrets, Keys, and Data Protection: 98-secrets-keys-data-protection.md
+    - Privacy Engineering and Data Protection: 99-privacy-engineering.md
+    - Audit Logging and Non-repudiation: 100-audit-logging.md
+    - Session Management: 101-session-management.md
+    - Multi-Tenancy and Isolation: 102-multi-tenancy-isolation.md
 
   - Injection:
     - injection/index.md

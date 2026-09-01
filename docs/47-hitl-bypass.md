@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Audit Logging and Non-repudiation](100-audit-logging.md) for the append-only, signed logs a post-hoc review needs to reconstruct what an approval actually authorized.*
+
 ## Quick reference
 
 ```

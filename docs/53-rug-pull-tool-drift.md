@@ -4,6 +4,8 @@
 
 **Interview frequency:** Niche
 
+*See also: [Audit Logging and Non-repudiation](100-audit-logging.md) for why an audit trail needs the tool-definition version logged at call time to stay meaningful after drift.*
+
 ## Quick reference
 
 Initial `tools/list` response the user approves during onboarding:

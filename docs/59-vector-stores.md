@@ -4,6 +4,8 @@
 
 **Interview frequency:** Niche
 
+*See also: [Authorization](97-authorization.md) for the RBAC/ABAC/ReBAC model families and PDP/PEP placement behind treating a similarity filter as an authorization decision, and [Multi-Tenancy and Isolation](102-multi-tenancy-isolation.md) for the data-layer isolation patterns, like RLS, that this doc's four systems implement differently.*
+
 ## Quick reference
 
 ```sql

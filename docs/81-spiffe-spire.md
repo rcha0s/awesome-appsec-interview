@@ -6,6 +6,8 @@
 
 *See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
 
+*See also: [Secrets, Keys, and Data Protection](98-secrets-keys-data-protection.md) for the HSM/TPM/TEE key custody model backing SVID private keys and Agent attestation secrets.*
+
 ## Quick reference
 
 X.509-SVID: an ordinary X.509 leaf certificate whose only Subject Alternative Name is a `URI` extension holding the SPIFFE ID. No DNS SAN, no CN identity, no email. RFC 5280 URI-SAN semantics are what a verifier checks.

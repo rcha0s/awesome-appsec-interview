@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [Session Management](101-session-management.md) for the architectural decision on where the session continuity proof lives per surface (web, mobile, service) and how it's revoked.*
+
 ## Quick reference
 
 ```http

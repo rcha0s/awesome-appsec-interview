@@ -77,7 +77,7 @@ After the workflow returns, verify:
 - `## Sources` exists with numbered `<a id="refN"></a>[N] ...` entries; inline refs are all `<sup>[[N]](#refN)</sup>`.
 - Every internal `docs/NN-slug.md` link in every table resolves to a real file (cross-check against the list from step 4 and `ls docs/`).
 - No em-dashes in body prose. No inline author-name attributions.
-- Line count is roughly 350 to 600 (wider than a per-vuln doc's 300-700 despite going shallower on any single point, since it spans multiple contexts and options).
+- Line count is roughly 160 to 260, scaling with context count. Check content coverage directly rather than treating length alone as a quality signal.
 
 If any check fails, surface it to the user with the exact line ranges and offer to re-run merge with a specific fix directive.
 
@@ -165,7 +165,7 @@ Structural:
 
 Doc-specific:
   - No inline author names in prose. Sources entries name venue + URL.
-  - Length: 350 to 600 lines. Wider than a per-vuln doc despite going shallower on any single point, since it spans multiple contexts and options. No filler.
+  - Length: roughly 160 to 260 lines, scaling with context count (2 contexts lands nearer the bottom, 4 nearer the top). Revised down from an original 350-600 target set before the 5-8 row cap existed; once every table is properly capped and paragraphs stay short, a well-built doc naturally lands in this range. Do not pad to hit a higher number, and do not read a doc in this range as thin by default, check its actual content coverage instead.
   - Prose paragraphs in "Where this decision forks" and each context's opening (before its tables) stay short, 2-4 sentences, one idea each. This doc type is tables-first; long paragraphs here are exactly the kind of dense wall the tables exist to replace. Do not restate a claim the mental-model blockquote already made; each paragraph should add something the blockquote didn't cover, not re-explain it in different words.
   - Within "Where this decision forks" and each context's opening, when a section accumulates 3+ paragraphs that are each making one PARALLEL, independent point (not building on each other sequentially), convert those into a short bulleted list with a 3-6 word bold lead-in per bullet instead of leaving them as back-to-back paragraphs. A reader skimming several short paragraphs in a row loses the parallel structure between them; a bulleted list keeps it visible. The one exception: a worked example that contrasts two concrete scenarios (e.g. "a fintech signup flow vs. an internal admin console both land on different defaults") reads better as flowing prose and should stay a paragraph, not get bulleted into fragments.
   - No sentence anywhere describes what a section's format is or does ("The questions below mix X framing with Y framing because...", "This table compares..."). That is meta-commentary about the document, not content for the reader. Open directly on the first real point, table, or question.

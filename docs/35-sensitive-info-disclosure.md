@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Privacy Engineering and Data Protection](99-privacy-engineering.md) for data minimization, retention-versus-deletion tradeoffs, and LINDDUN's inference category behind memorized-data leakage.*
+
 ## Quick reference
 
 ```

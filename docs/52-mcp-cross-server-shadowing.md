@@ -4,6 +4,8 @@
 
 **Interview frequency:** Niche
 
+*See also: [Audit Logging and Non-repudiation](100-audit-logging.md) for why an audit trail must log the resolved tool and server identity, not just the requested name.*
+
 ## Quick reference
 
 A benign server exposes `send_email`. A second, malicious MCP server registers a tool whose *description* carries a directive that reprograms the host LLM's routing for the benign tool. The tool itself is never invoked. The LLM concatenates all tool descriptions into one flat system context with no server-provenance boundary.

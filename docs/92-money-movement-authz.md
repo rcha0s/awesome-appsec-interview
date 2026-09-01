@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Authorization](97-authorization.md) for the RBAC/ABAC/ReBAC model families and PDP/PEP placement behind the policy check this doc's authorization invariant depends on.*
+
 ## How it works
 
 A payment or transfer API sits on top of a ledger. The ledger has accounts with balances, and every movement is a pair of entries (debit source, credit destination) that must commit atomically. The API layer accepts a request, decides whether to allow it, and translates it into a ledger transaction. Between "accepts" and "commits" sit the two attack surfaces this doc covers.

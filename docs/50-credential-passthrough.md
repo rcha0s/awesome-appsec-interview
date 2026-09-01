@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Authorization](97-authorization.md) for the RBAC/ABAC/ReBAC model families and PDP/PEP placement that should back the per-tool, per-call scoping decisions this doc describes.*
+
 ## Quick reference
 
 ```
