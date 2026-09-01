@@ -4,6 +4,8 @@
 
 **Interview frequency:** Core
 
+*See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
+
 ## How it works
 
 A session is a server-side record of an authenticated principal, referenced by an opaque session ID that the browser presents on each request, normally in a cookie. The security of the whole scheme rests on three properties of that ID and its lifecycle:

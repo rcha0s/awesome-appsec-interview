@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
+
 ## Quick reference
 
 Wire-level example: a TOTP verification request, followed by a step-up id_token showing the resulting AMR/ACR claims.

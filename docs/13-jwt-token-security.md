@@ -4,6 +4,8 @@
 
 **Interview frequency:** Core
 
+*See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
+
 ## How it works
 
 A JWS is three base64url segments joined by dots: `header.payload.signature`. Base64url (RFC 4648 section 5) uses `-` and `_` instead of `+` and `/` and strips `=` padding, so the token is URL-safe and header-safe. Only the signature is cryptographic; the header and payload are encoded, not encrypted, and anyone holding the token can read them.

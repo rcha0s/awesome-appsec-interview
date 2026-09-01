@@ -15,7 +15,15 @@ This is a **revision aid, not a tutorial**. It assumes deep prior knowledge and 
 
 Each doc also carries an **Interview frequency** tag: Core (near-certain in any senior/staff appsec interview), Common (comes up often, not universal), Situational (depends on the role/domain matching), or Niche (real depth, rarely the actual focus). The Freq column below mirrors it.
 
+One exception to the shape above: the **Architectural controls** docs (first section in the index below) are design checklists over one security-architecture decision, not one system. They fork by deployment context, compare realistic options in tables, and link out to the deep-dive docs instead of carrying their own How it works, Attack techniques, or Defense sections. See `docs/adr/0003-architectural-control-doc-shape.md` for the shape.
+
 ## Index
+
+### Architectural controls
+
+| # | Topic | Freq | Focus |
+|---|-------|------|-------|
+| 96 | [Authentication](docs/96-authentication.md) | Core | Design checklist forked by web/mobile/desktop/service-to-service: realistic options, modern defaults, and the sub-feature gaps each drags along (reset, remember-me, MFA recovery, deep-link interception, credential rotation) |
 
 ### Server-side and injection
 

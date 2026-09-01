@@ -4,6 +4,8 @@
 
 **Interview frequency:** Core
 
+*See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
+
 ## How it works (protocol breakdown)
 
 Three (or four) parties:

@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [Authentication](96-authentication.md) for how this fits into the broader authentication architecture decision across web, mobile, desktop, and service-to-service contexts.*
+
 ## Quick reference
 
 Signed SAML Response over HTTP-POST (elided, whitespace inserted for readability):
