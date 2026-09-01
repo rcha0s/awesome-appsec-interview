@@ -1,26 +1,28 @@
 # Authentication
 
-> This decision is about how a system proves an actor is who it claims to be, and what credential that proof hands back for use on every request after. It forks hard by deployment surface because each surface controls a different trust anchor: a browser can hold an HttpOnly cookie the page's own JavaScript never touches, a mobile app has a biometric-backed OS keystore, a CLI often has neither a browser nor a keystore worth trusting, and a service has no human around to redirect to a login page in the first place. Reusing a web pattern outside its surface goes wrong in predictable ways, a client secret embedded in a decompilable mobile binary, a bearer token dropped in `localStorage` where any injected script can read it, a session cookie assumed on a headless service that never sends one. The single biggest thing a Staff reviewer checks is whether a credential's lifetime and storage location match its blast radius, because a long-lived, broadly-scoped credential sitting somewhere an attacker can read it is the recurring root cause underneath most authentication incidents, regardless of surface. Every mechanism below also drags a set of secondary flows along with it, password reset, remember-me, MFA recovery, that get their own line in the design-considerations tables because they fail independently of the primary mechanism, and a review that only checks the primary login path misses most of the real incidents.
+> Authentication rests on three factors: something you know (a password or PIN), something you have (a device, token, or key), and something you are (a biometric)<sup>[[10]](#ref10)</sup>. Every mechanism below is a different way of proving one or more of those factors, and combining factors from different categories, not just adding a second password, is what actually raises assurance. The decision forks hard by deployment surface because each surface controls a different trust anchor for holding that proof: a browser gets an HttpOnly cookie the page's own JavaScript never touches, a mobile app gets a biometric-backed OS keystore, a CLI often has neither a browser nor a keystore worth trusting, and a service has no human around to redirect to a login page in the first place. The single biggest thing a Staff reviewer checks is whether a credential's lifetime and storage location match its blast radius, because a long-lived, broadly-scoped credential sitting somewhere an attacker can read it is the recurring root cause underneath most authentication incidents, regardless of factor or surface. Every mechanism also drags secondary flows along with it, password reset, remember-me, MFA recovery, that fail independently of the primary factor and get their own line in the design-considerations tables below.
 
 **Interview frequency:** Core
 
 ## Where this decision forks
 
-Authentication's security profile forks by deployment surface, not by industry or by application type, because the surface determines what trust anchors and storage primitives are even available to the design. A web app gets a same-origin cookie jar and CSRF exposure; a mobile app gets an OS keystore and biometric hardware but no reliable cookie story across app-to-app redirects; a desktop or native app gets full OS keychain access plus the option of running headless; a service has no user to authenticate at all and instead authenticates a workload or a client application. This is the same axis this repo already uses for authentication and session management topics, and it holds up here because the realistic option set and the sub-feature gaps genuinely differ across each context rather than converging on a shared answer. A team that picks one mechanism and applies it everywhere, session cookies for a mobile app's API calls, a shared static secret between microservices, is usually reproducing a web-shaped or a service-shaped answer in the wrong context rather than making a deliberate choice. The options tables below separate the primary credential from the continuity and storage layer wherever a context conflates them, because interview answers that name only one and skip the other miss half the design. Assurance level, how confident the system is in the claimed identity, is a real secondary axis layered onto a mechanism within a context<sup>[[10]](#ref10)</sup>, but it doesn't replace deployment surface as the primary fork, because a mobile app and a web app can both target the same assurance tier through completely different storage and redirect mechanics.
+Deployment surface is the axis, not industry or application type, because the surface determines which trust anchors and storage primitives are even available. A team that applies one context's answer everywhere, session cookies for a mobile API, a shared static secret between microservices, is usually reproducing a web-shaped or service-shaped default in the wrong context rather than choosing deliberately.
 
-The four contexts also differ in who reviews the design. A web login gets scrutinized by whoever owns the browser-facing app; a service-to-service credential often gets provisioned by whoever stood up the pipeline, with no security review at all until an audit or an incident forces one, which is part of why static API keys persist so much longer in that context than anywhere else.
+A few things matter beyond just picking a context:
 
-*Diagram: omitted. A single request-flow diagram would need to show a browser redirect, a mobile app-to-IdP handoff through an external user agent, an OS-keychain-gated native flow, and a workload-to-workload mTLS handshake in the same picture, four structurally different flows that don't compress into one annotated diagram without becoming either too abstract to clarify anything or too cluttered to read. The options tables below carry the comparison instead.*
+- **Assurance level is a separate axis.** How confident the system is in the claimed identity<sup>[[10]](#ref10)</sup> layers onto a mechanism within a context; it doesn't replace deployment surface as the primary fork. A mobile app and a web app can target the same assurance tier through completely different storage and redirect mechanics.
+- **Credential and continuity are separate decisions.** The options tables below split the primary credential from the layer that keeps it usable across later requests wherever a context conflates the two; naming only one in an interview answer misses half the design.
+- **Review ownership differs by context.** A web login gets scrutinized by whoever owns the browser-facing app. A service-to-service credential often gets provisioned by whoever stood up the pipeline, with no security review until an audit or incident forces one, which is part of why static API keys persist longest there.
 
 ### Web applications
 
-The browser is both the strongest and the most exposed client here. It gets first-party storage the app's own JavaScript can be locked out of (`HttpOnly` cookies)<sup>[[8]](#ref8)</sup>, but it also runs third-party and first-party script side by side, so anything readable by JS is one XSS bug away from theft.
+The browser is both the strongest and the most exposed client here: it gets first-party storage the app's own JavaScript can be locked out of (`HttpOnly` cookies)<sup>[[8]](#ref8)</sup>, but it also runs third-party and first-party script side by side, so anything readable by JS is one XSS bug away from theft.
 
-Federation matters more in this context than any other, because most orgs run many web properties and want one login across all of them, and the login surface itself is the most public-facing, most attacked entry point in the whole system, because it's reachable by anyone with a browser and no prior foothold.
+- **Federation matters more here than anywhere else**, since most orgs run many web properties and want one login across all of them.
+- **This is also the most attacked surface**, reachable by anyone with a browser and no prior foothold.
+- **Credential and continuity get confused most often in this context.** A passkey or an OIDC assertion proves who the user is at one moment; the session cookie or BFF-issued cookie that follows keeps that proof usable across later requests. They need separate rows below, not one row standing in for both.
 
 A consumer fintech signup flow and an internal admin console both live in this context but land on different defaults: the fintech app leans hardest on passkeys and step-up because the account guards money, and the admin console leans on OIDC SSO because centralized revocation across every internal tool matters more than any single login's friction.
-
-The web context is also where the credential and the continuity layer are most often confused with each other. A passkey or an OIDC assertion proves who the user is at one moment; the session cookie or BFF-issued cookie that follows is what keeps that proof usable across subsequent requests, and the two need separate rows below rather than one row standing in for both decisions.
 
 | Option | Best for | Avoid when | Status (2026) | Deep dive |
 | --- | --- | --- | --- | --- |
@@ -48,13 +50,12 @@ Also worth checking: login-endpoint credential stuffing (progressive delay or CA
 
 ### Mobile applications
 
-The app can't lean on a same-origin cookie jar the way a browser tab can, and anything shipped in the binary, including a client secret, is recoverable by anyone who decompiles the APK or IPA. The platform gives back something a browser doesn't, though, a hardware-backed keystore and, on modern OS versions, a biometric authenticator the app never has to see raw.
+The app can't lean on a same-origin cookie jar the way a browser tab can, and anything shipped in the binary, including a client secret, is recoverable by anyone who decompiles the APK or IPA. In exchange, the platform offers a hardware-backed keystore and, on modern OS versions, a biometric authenticator the app never has to see raw.
 
-Native OAuth for mobile has its own IETF guidance precisely because the naive web pattern fails here<sup>[[1]](#ref1)</sup>: a public client can't hold a secret, and the redirect back into the app is a place an attacker's app can try to insert itself.
+- **Native OAuth for mobile has its own IETF guidance** because the naive web pattern fails here<sup>[[1]](#ref1)</sup>: a public client can't hold a secret, and the redirect back into the app is a place an attacker's app can try to insert itself.
+- **Recovery deserves the same weight as enrollment.** A mobile-first user who loses their phone loses the passkey, the authenticator app, and the OS keystore all at once, so the recovery path has to survive total device loss, not just a forgotten password.
 
 A banking app and a habit-tracker app both ship as native mobile clients, but the banking app pairs PKCE with a passkey and step-up before a transfer, while the habit tracker can reasonably stop at OS-keystore-backed tokens and a lighter login, because the blast radius of a stolen session differs by orders of magnitude between the two.
-
-Recovery deserves the same weight here as enrollment. A mobile-first user who loses their phone loses the passkey, the authenticator app, and the OS keystore all at once, so the recovery path has to survive total device loss, not just a forgotten password.
 
 | Option | Best for | Avoid when | Status (2026) | Deep dive |
 | --- | --- | --- | --- | --- |
@@ -80,13 +81,10 @@ Also worth checking: session/token continuity across restart and backgrounding, 
 
 ### Desktop and native applications
 
-Desktop apps sit between mobile and service-to-service: full OS access like mobile, but often no biometric hardware guaranteed, and frequently no browser to redirect through at all, because a CLI tool has no embedded user agent. Enterprise-managed fleets add a wrinkle mobile mostly doesn't have, device-issued client certificates and domain-joined identity as anchors independent of any user credential.
+Desktop apps sit between mobile and service-to-service: full OS access like mobile, but often no biometric hardware guaranteed, and frequently no browser to redirect through at all, because a CLI tool has no embedded user agent. Enterprise-managed fleets add a wrinkle mobile mostly doesn't have: device-issued client certificates and domain-joined identity as anchors independent of any user credential.
 
-A CLI or headless service also has to authenticate a human at some point without ever running a browser itself, which is exactly the gap the OAuth device authorization grant was standardized to close<sup>[[3]](#ref3)</sup>.
-
-A CLI deployment tool used by a platform team and a consumer-facing desktop email client both run as native apps, but the CLI tool is the one that actually exercises the device authorization flow day to day, because a headless CI runner has no browser to redirect through at all.
-
-The desktop context also carries an assumption mobile and web reviewers rarely have to question: that the machine itself is single-user and trusted. Shared lab machines, kiosk deployments, and imaged fleets break that assumption routinely, which is why several of the design-consideration rows below are about isolation between users and processes rather than about the login mechanism itself.
+- **A CLI or headless service still has to authenticate a human**, without ever running a browser itself, which is exactly the gap the OAuth device authorization grant was standardized to close<sup>[[3]](#ref3)</sup>.
+- **The single-user, trusted-machine assumption breaks routinely.** Shared lab machines, kiosk deployments, and imaged fleets violate it, which is why several of the design-consideration rows below are about isolation between users and processes rather than the login mechanism itself.
 
 | Option | Best for | Avoid when | Status (2026) | Deep dive |
 | --- | --- | --- | --- | --- |
@@ -111,13 +109,12 @@ Also worth checking: OS-level biometric or PIN unlock gating the keychain (don't
 
 ### Service-to-service (machine) authentication
 
-There's no human to redirect to a consent screen and no browser to hold a session cookie. The identity being authenticated is a workload or a client application, not a person, and the credential has to be something automation can mint, rotate, and present without a human in the loop.
+The identity being authenticated is a workload or a client application, not a person, and the credential has to be something automation can mint, rotate, and present without a human in the loop.
 
-This is also where static long-lived secrets do the most damage when they leak, because nobody notices a machine credential go stale the way a person notices a session logging them out, and a key sitting in a repository or a log line can sit undetected for a long time before anyone rotates it.
+- **Static long-lived secrets do the most damage here when they leak.** Nobody notices a machine credential go stale the way a person notices a session logging them out, and a key sitting in a repository or a log line can go undetected for a long time before anyone rotates it.
+- **Credential and identity are least separable in this context.** A human can reset a password and keep the same account; a workload's credential and its identity are usually minted together, so revoking one commonly means retiring the other, which is why rotation and decommissioning show up as design considerations rather than afterthoughts.
 
 A payments microservice mesh and a marketing-automation platform calling a single third-party email API both do service-to-service auth, but the mesh justifies SPIFFE/SPIRE's operational cost at its service count, while the marketing platform is well served by a scoped OAuth client-credentials grant against the email vendor's token endpoint.
-
-This context is also the one where the credential and the identity it represents are least separable. A human can reset a password and keep the same account, but a workload's credential and its identity are usually minted together, so revoking one commonly means retiring the other, which is why rotation and decommissioning show up as design considerations rather than as afterthoughts.
 
 | Option | Best for | Avoid when | Status (2026) | Deep dive |
 | --- | --- | --- | --- | --- |
@@ -188,8 +185,6 @@ The end state across all four contexts is the same shape even though the mechani
 The signal that a migration is safe to complete is rarely a calendar date, it's usage data. Track passkey or SSO enrollment rate against total active users, fallback-path usage (how often the old password or static key still gets used once the new option exists), and support-ticket volume tied to the new flow specifically. A legacy path with near-zero usage and a flat support-ticket trend is the actual signal to retire it, not a quarter-end deadline picked before the rollout started.
 
 ## Interviewer probes
-
-The questions below mix tradeoff framing, when would you choose X over Y, with gap-probing framing, what's commonly missed, because a Staff-level review of an authentication design tests both: whether the primary mechanism fits the context, and whether the secondary flows riding along with it were designed at all.
 
 **When would you choose a server-side session cookie or BFF over a JWT bearer token stored in the browser?**
 

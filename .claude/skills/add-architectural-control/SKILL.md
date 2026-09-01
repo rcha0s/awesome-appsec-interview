@@ -10,7 +10,7 @@ Adds ONE new architectural-control doc to the awesome-appsec-interview repo, mat
 ## What this skill produces
 
 - One markdown file at `docs/NN-<slug>.md` where `NN` is the next available two-digit number in the docs directory (same flat numbering as `add-appsec-topic`, no new subdirectory).
-- Opener: `#` title on line 1, blockquote mental-model paragraph on line 3 stating what decision this control governs, why it forks by context, and the single biggest thing a Staff reviewer checks for, then `**Interview frequency:** Core | Common | Situational | Niche`.
+- Opener: `#` title on line 1, blockquote mental-model paragraph on line 3 grounding the topic in its established first-principles framework by name (not paraphrased: authentication's three factors per NIST SP 800-63B, authorization's RBAC/ABAC/ReBAC access-control models, encryption's CIA triad and Kerckhoffs's principle, etc.), stating what decision this control governs, why it forks by context, and the single biggest thing a Staff reviewer checks for, then `**Interview frequency:** Core | Common | Situational | Niche`.
 - `## Where this decision forks`: states the decomposition axis this topic actually forks on (deployment surface, environment/lifecycle stage, actor type, or another axis — topic-dependent, never assumed).
 - One `### <context>` subsection per fork, each with an options table (`Option | Best for | Avoid when | Status (2026) | Deep dive`) and a design-considerations table for that context's sub-feature gaps (`Consideration | Why it matters | Design guidance | Deep dive`), **capped at 5-8 rows**: the highest-signal gaps only. Everything else worth a mention gets one compact closing line under the table instead of its own row (comma-separated, gap name plus a three-to-six word reason, linking to the deep-dive doc(s) that cover the rest).
 - `## Recommended defaults by context` (compact table), `## Migration path`, `## Interviewer probes` (5-8 Q&A pairs, tradeoff- and gap-framed, Mid vs Principal answers), `## Sources` (HTML-anchored numbered entries).
@@ -61,8 +61,12 @@ Call `Workflow`. Script template below. Same 4-agent pipeline as `add-appsec-top
 After the workflow returns, verify:
 
 - File exists at `docs/NN-<slug>.md`.
-- Line 1 is `# <title>` and line 3 starts with `> ` (blockquote mental model). `**Interview frequency:**` line follows.
+- Line 1 is `# <title>` and line 3 starts with `> ` (blockquote mental model), and that blockquote names the topic's real first-principles framework (not a paraphrase or an invented one) before anything else. `**Interview frequency:**` line follows.
+- No sentence anywhere in the doc states a diagram was considered, included, or omitted. That call belongs only in the merge agent's own response to you, never in the shipped file.
 - `## Where this decision forks` states an explicit axis in its opening sentence.
+- Prose paragraphs stay short (2-4 sentences) and don't restate the mental-model blockquote in different words. If a paragraph in "Where this decision forks" or a context's opening reads like the blockquote said again more slowly, push back and ask for a tighter pass.
+- Any run of 3+ parallel, independent short paragraphs (not a worked example) got converted to a bulleted list with bold lead-ins. No section opens with a sentence describing its own format instead of its first real point.
+- No prose paragraph runs past 5-6 sentences. Table cells are exempt (they're already dense by design); this check is for the blockquote and the prose in "Where this decision forks" and each context's opening only.
 - At least two `### <context>` subsections exist (a doc that doesn't fork at all is not this doc type; push back and ask whether it should be a regular `add-appsec-topic` doc instead).
 - Every `### <context>` subsection has both an options table and a design-considerations table with the exact headers specified in the shape spec.
 - Every design-considerations table has 5-8 rows, not more. If a context genuinely needs more coverage, the excess belongs in the compact closing line under the table, not additional rows. A table over 8 rows is the specific failure mode that prompted this cap; push back and re-run merge with an explicit row-count directive if any table exceeds it.
@@ -112,7 +116,7 @@ DOC SHAPE (per docs/adr/0003-architectural-control-doc-shape.md and CONTEXT.md's
 
 Section order:
   1. \`#\` Title on line 1 (the decision, e.g. "Authentication," not one mechanism).
-  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences): what decision this control governs, why it forks by context, and the single biggest thing a Staff reviewer checks for.
+  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences): OPENS by naming the topic's established first-principles framework (authentication: something you know / have / are, per NIST SP 800-63B; authorization: RBAC/ABAC/ReBAC; encryption: the CIA triad and Kerckhoffs's principle; use the real framework for whatever the topic is, never invent one), then what decision this control governs, why it forks by context, and the single biggest thing a Staff reviewer checks for. A reader without the framework already in mind has nothing to hang the rest of the doc on; this is not optional.
   3. \`**Interview frequency:** Core | Common | Situational | Niche\` on its own line.
   4. \`## Where this decision forks\`: 3-5 sentences naming the decomposition axis this topic's security profile actually diverges across. Suggested axis: <axis>. Use it if it fits; if a different axis is truer to this specific topic, use that one instead and say so explicitly. Do not force every topic through deployment-surface (web/mobile/desktop/service-to-service) if that is not the axis that matters here.
   5. One \`### <context>\` subsection per fork named in step 4. Each contains, in order:
@@ -162,9 +166,16 @@ Structural:
 Doc-specific:
   - No inline author names in prose. Sources entries name venue + URL.
   - Length: 350 to 600 lines. Wider than a per-vuln doc despite going shallower on any single point, since it spans multiple contexts and options. No filler.
+  - Prose paragraphs in "Where this decision forks" and each context's opening (before its tables) stay short, 2-4 sentences, one idea each. This doc type is tables-first; long paragraphs here are exactly the kind of dense wall the tables exist to replace. Do not restate a claim the mental-model blockquote already made; each paragraph should add something the blockquote didn't cover, not re-explain it in different words.
+  - Within "Where this decision forks" and each context's opening, when a section accumulates 3+ paragraphs that are each making one PARALLEL, independent point (not building on each other sequentially), convert those into a short bulleted list with a 3-6 word bold lead-in per bullet instead of leaving them as back-to-back paragraphs. A reader skimming several short paragraphs in a row loses the parallel structure between them; a bulleted list keeps it visible. The one exception: a worked example that contrasts two concrete scenarios (e.g. "a fintech signup flow vs. an internal admin console both land on different defaults") reads better as flowing prose and should stay a paragraph, not get bulleted into fragments.
+  - No sentence anywhere describes what a section's format is or does ("The questions below mix X framing with Y framing because...", "This table compares..."). That is meta-commentary about the document, not content for the reader. Open directly on the first real point, table, or question.
+
+CONCISENESS (applies to prose only, never to table cells, which are already dense by design):
+  - Long, dense paragraphs get skimmed past by engineers, not read. This doc type is especially exposed to it: the topic is deliberately high-level, which tempts narrating every nuance in prose instead of trusting the tables to carry the comparison. If a paragraph exceeds roughly 5-6 sentences, split it or convert it to the structure that says the same thing faster (a bullet list, a table row, a shorter sentence). This does not relax citation-honesty, framework-grounding, or the row caps above; say the same substance in less space, do not cut substance to hit a length target.
+  - The doc-specific rules above (short paragraphs, converting parallel-point paragraph runs to bulleted lists, cutting meta-commentary and blockquote restatement) are how this principle plays out concretely in this doc type's opener and context sections. Apply them together, not as a checklist to satisfy in isolation.
 
 DIAGRAMS:
-  - Optional, topic-dependent, same selectivity rule as add-appsec-topic. Include at most one \`\`\`mermaid diagram, in "Where this decision forks" or the first context subsection, ONLY if a single request-flow diagram annotated with where each option inserts would genuinely clarify faster than the tables alone. Most architectural-control docs skip the diagram; the tables ARE the primary visual structure of this doc type. State the call explicitly ("diagram: included/omitted, <reason>").
+  - Optional, topic-dependent, same selectivity rule as add-appsec-topic. Include at most one \`\`\`mermaid diagram, in "Where this decision forks" or the first context subsection, ONLY if a single request-flow diagram annotated with where each option inserts would genuinely clarify faster than the tables alone. Most architectural-control docs skip the diagram; the tables ARE the primary visual structure of this doc type. Report the diagram call ("diagram: included/omitted, <reason>") as your OWN RESPONSE TEXT to the orchestrating task, never as a literal sentence inside the shipped document body. The reader of the published doc does not need to be told a diagram was considered and skipped; that line is process metadata, not content, and it must not appear in the doc itself, in any section, under any heading.
   - MERMAID GOTCHA: never put a semicolon (;) inside a node label, edge label, or Note text. Use a comma.
   - LAYOUT GOTCHA: 3+ unconnected sibling \`subgraph\` blocks lay out in one illegible row. Split into separate diagrams or force a grid with \`~~~\` rank-only links.
   - Do not set explicit background/text/theme colors in diagram source. The site's theming applies automatically.
@@ -215,9 +226,11 @@ Every ### <context> subsection must give a Staff-level reader enough to answer "
 Every design consideration must be something a candidate could plausibly be probed on missing.
 
 Opener check:
-  - Blockquote mental model on line 3 states the fork and the core tension
+  - Blockquote mental model on line 3 names the topic's real first-principles framework by name before anything else (flag as critical if missing or invented), and states the fork and the core tension
   - Interview frequency tag present
   - ## Where this decision forks names an explicit, topic-appropriate axis (not a generic default applied without justification)
+  - No sentence anywhere in the doc describes a diagram decision (included/omitted/considered); that is process metadata and must not appear in the shipped file
+  - No prose paragraph merely restates the mental-model blockquote in different words
 
 Shape check:
   - At least two ### <context> subsections, each with both required tables
