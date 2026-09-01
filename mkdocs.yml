@@ -72,6 +72,10 @@ markdown_extensions:
 nav:
   - Home: index.md
 
+  - Architectural Controls:
+    - architecture-controls/index.md
+    - Authentication: 96-authentication.md
+
   - Injection:
     - injection/index.md
     - SQL Injection: 01-sql-injection.md

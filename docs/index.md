@@ -16,6 +16,8 @@ Every doc follows the same fixed shape (see below), specifically so you don't ha
 
 **Search** (top bar) finds text across all 80+ docs instantly. Each doc also carries an **Interview frequency** tag, Core, Common, Situational, or Niche, so you can triage what's worth your time before you open it. Core means near-certain in any senior/staff interview; Niche means real depth that's rarely the actual focus even when the domain matches.
 
+**Architectural Controls** (the first section below) is a different shape, deliberately. Instead of one system's mental model, How it works, and Attack techniques, each doc there is a design checklist over one security-architecture decision, broken down by context, with tables of options and the second-order gaps each one drags along, linking out to the deep-dive docs rather than repeating them. Start there if you're prepping for an architecture-review-style interview loop; start in the topic sections below if you're prepping for a per-vulnerability deep-dive loop.
+
 ## What "invariant" means in these docs
 
 An invariant is the specific property that has to hold for a system to be safe, stated precisely enough that you can point at the exact moment it breaks. "Validate input" is not an invariant. "The resource server rejects any access token whose `aud` does not equal its own canonical identifier" is.
@@ -38,6 +40,7 @@ For AI/agent-heavy roles: start at the three hubs (Web LLM Attacks, MCP Protocol
 
 | Section | What it covers |
 |---|---|
+| [Architectural Controls](architecture-controls/index.md) | Design checklists over one security decision (Authentication, Authorization, Secrets Management, ...), broken down by context, linking out to the deep dives below |
 | [Injection](injection/index.md) | SQLi, command injection, XXE, SSTI, deserialization, SSRF, file upload, path traversal, NoSQLi |
 | [Authentication & Identity](authn/index.md) | Auth/session, JWT, OAuth/OIDC, SAML, SSO, WebAuthn, MFA, password auth, federated identity |
 | [Access Control](15-access-control-idor.md) | IDOR/BOLA/BFLA, business logic and race conditions, information disclosure |

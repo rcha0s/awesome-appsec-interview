@@ -9,8 +9,15 @@ A single markdown file under `docs/NN-<slug>.md`. One topic per file. Not a tuto
 _Avoid_: Article, page, guide.
 
 **Hub doc**:
-A short overview doc that indexes deep dives on related topics (docs 30, 31, 32 are hubs).
+A short overview doc that indexes deep dives on related topics (docs 30, 31, 32 are hubs). Still attack-shaped: it follows the same locked doc section order as every other doc.
 _Avoid_: Umbrella, index.
+
+**Architectural control doc**:
+A design-checklist doc over one security-architecture decision (Authentication, Authorization, Secrets Management, ...), not one system. Breaks the decision down by whichever deployment context its risk profile actually diverges across (web / mobile / desktop-native / service-to-service, or another axis when that's the real one for the topic), enumerates the realistic options per context, and for each option surfaces both its top-level tradeoffs and the security-relevant sub-features it drags along (e.g. password auth's reset/remember-me/recovery flows) as concrete, high-level design guidance, not a full defense treatment. Links out to the existing deep-dive docs for attack mechanics and defense-in-depth instead of repeating them. Follows the shape locked in [docs/adr/0003-architectural-control-doc-shape.md](adr/0003-architectural-control-doc-shape.md), not the section order below, which applies to every other doc type. Never attack-shaped; never carries its own Attack techniques or Defense sections.
+_Avoid_: Comparison doc, overview doc.
+
+**Interview frequency**:
+A tag every doc carries: Core (near-certain in any senior/staff appsec interview), Common (comes up often, not universal), Situational (depends on the role/domain matching), or Niche (real depth, rarely the actual focus). Defined here and mirrored in `README.md`'s Freq column and `docs/index.md`.
 
 **Opener contract**:
 The set of properties every doc's opening block must satisfy. Currently: title on line 1, blockquote mental-model paragraph immediately after, then `## Quick reference` with wire example and invariants table. Reviewer agents check this contract on every draft.
@@ -87,6 +94,7 @@ Every doc follows this order:
 - Every commit that adds, removes, or renames a doc under `docs/` also updates `README.md` in the same commit. A doc that exists on disk but not in the index is invisible to the reader. This is not optional and does not get deferred to a follow-up.
 - Before drafting a new doc, check whether the topic substantially overlaps an existing one (search the README Index and grep `docs/`). If it does, extend the existing doc instead of forking a near-duplicate. Two docs covering the same ground splits reader attention and the copies drift out of sync; one doc that covers it fully is the correct outcome.
 - A new doc that relates to an existing one (shared mechanism, prerequisite, or attack that chains into another) gets cross-linked from both sides in the same commit: the new doc references the existing one, and the existing one is edited to reference the new doc back. A one-way link is a dead end for a reader who lands on the older doc first.
+- A new doc also gets added to `mkdocs.yml`'s `nav:` tree in the same commit, not just `README.md`. The README is the GitHub entry point; the nav is the live-site entry point. Both need the doc or half the audience can't find it.
 
 ## Backlog (not yet scheduled)
 

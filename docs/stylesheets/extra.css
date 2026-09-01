@@ -17,6 +17,19 @@ body[data-md-color-scheme="slate"] {
   color-scheme: only dark;
 }
 
+/* Redundant, deliberately: mermaid's HTML-labeled nodes render as
+   <div> content inside an SVG <foreignObject>, and Chrome's forced-dark
+   heuristic has documented inconsistencies honoring inherited color-scheme
+   across that HTML-in-SVG boundary. Declaring it again directly on the
+   diagram container removes any dependency on that inheritance working. */
+body[data-md-color-scheme="default"] .mermaid-diagram {
+  color-scheme: only light;
+}
+
+body[data-md-color-scheme="slate"] .mermaid-diagram {
+  color-scheme: only dark;
+}
+
 /* Diagram presentation. Colors themselves come from mermaid-theme.mjs;
    this just gives rendered diagrams a card treatment consistent with the
    rest of the site and keeps wide sequence diagrams from breaking layout
