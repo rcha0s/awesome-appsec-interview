@@ -80,6 +80,26 @@ A trust domain is a namespace of identities under one root CA. `prod.example.com
 
 SPIRE ships as two binaries. Server holds the trust domain's signing keys (ideally in KMS), a datastore of registration entries (rules of the form "if a workload matches these selectors on this node, issue this SPIFFE ID"), and a bundle of trusted CAs. Agent runs one instance per node, mutually authenticates to Server using a node attestation method (aws-iid, gcp-iit, azure-msi, k8s-psat, tpm, join token, sigstore image signature), and receives its own X.509 SVID plus a cached slice of registration entries it might need to satisfy. Workloads on that node connect to the Agent's Workload API over a Unix Domain Socket. The Agent never trusts anything the caller sends over that socket for identity; it derives selectors from kernel and orchestrator sources (`unix:uid`, `unix:pid`, cgroup path, k8s pod labels via kubelet, docker image digest via containerd), matches them against registration entries, and returns the SVID.<sup>[[5]](#ref5)</sup><sup>[[6]](#ref6)</sup>
 
+### Component architecture
+
+```mermaid
+flowchart TB
+  subgraph Node["Node"]
+    Agent["SPIRE Agent<br/>(one per node)"]
+    W1["Workload A"]
+    W2["Workload B"]
+  end
+  Server["SPIRE Server<br/>registration entries, trust bundle"]
+  KMS["KMS / HSM<br/>signing keys"]
+
+  W1 -->|"Workload API, UDS"| Agent
+  W2 -->|"Workload API, UDS"| Agent
+  Agent -->|"NodeAttest, FetchSVID, mTLS"| Server
+  Server -->|"sign with intermediate CA key"| KMS
+```
+
+The sequence below shows the same components in motion: node bootstrap once per node, then per-workload issuance every rotation.
+
 ### Issuance sequence
 
 ```mermaid
@@ -98,7 +118,7 @@ sequenceDiagram
 
     Note over W,A: Workload issuance (every rotation)
     W->>A: FetchX509SVID over UDS (peer PID visible via SO_PEERCRED)
-    A->>K: read /proc/<pid>/cgroup, uid, pod labels via kubelet
+    A->>K: read /proc/PID/cgroup, uid, pod labels via kubelet
     A->>A: run workload attestors -> selector set
     A->>A: match selectors against registration entries
     alt no matching entry
@@ -111,7 +131,7 @@ sequenceDiagram
         A-->>W: SVID + private key + trust bundle
     end
 
-    Note over W: Workload reconnects before expiry; Agent streams new SVIDs
+    Note over W: Workload reconnects before expiry, Agent streams new SVIDs
     Note over W,A: Attack surface: 1) UDS reachable by co-tenant? 2) Selectors forgeable? 3) Bundle federation authenticated?
 ```
 

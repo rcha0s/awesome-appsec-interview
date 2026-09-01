@@ -73,21 +73,21 @@ sequenceDiagram
     B->>S: POST /login {creds} + sid=A
     S->>S: verify credentials
     Note over S,DB: FIXATION FIX: destroy A, mint fresh B
-    S->>DB: delete A; create session B (auth=true, mfa=false)
-    S-->>B: Set-Cookie: sid=B; Secure; HttpOnly; SameSite=Lax
-    Note over B: ATTACK SURFACE: XSS reads sid if HttpOnly missing; MITM reads if Secure missing
+    S->>DB: delete A, create session B (auth=true, mfa=false)
+    S-->>B: Set-Cookie: sid=B, Secure, HttpOnly, SameSite=Lax
+    Note over B: ATTACK SURFACE: XSS reads sid if HttpOnly missing, MITM reads if Secure missing
     B->>S: POST /mfa/verify + sid=B
     S->>S: verify TOTP
     Note over S,DB: STEP-UP: destroy B, mint fresh C (mfa=true)
-    S->>DB: delete B; create session C
+    S->>DB: delete B, create session C
     S-->>B: Set-Cookie: sid=C
     B->>S: GET /account + sid=C
     Note over B,S: ATTACK SURFACE: cross-site POST rides sid if SameSite=None or missing
     S->>DB: touch(C).last_seen = now
-    Note over S,DB: idle deadline slides forward; absolute deadline does not
+    Note over S,DB: idle deadline slides forward, absolute deadline does not
     B->>S: POST /logout + sid=C
     S->>DB: delete C
-    S-->>B: Set-Cookie: sid=; Expires=1970
+    S-->>B: Set-Cookie: sid=, Expires=1970
     Note over S,DB: ATTACK SURFACE: if only cookie is cleared and DB row lives, replay works
 ```
 

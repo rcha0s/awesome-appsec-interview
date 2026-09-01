@@ -100,7 +100,7 @@ sequenceDiagram
   IdP->>U: signed Response, InResponseTo=_a7b3
   U->>SP: POST /acs (Response, RelayState)
   Note over SP: verify signature, aud, issuer, InResponseTo matches stored ID, window, not-replayed
-  SP->>U: Set-Cookie: sp_session=...; redirect /dashboard
+  SP->>U: Set-Cookie: sp_session=..., redirect /dashboard
 
   Note over U,IdP: IdP-initiated (dangerous surface)
   U->>IdP: click "Launch App" tile
