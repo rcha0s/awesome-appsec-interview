@@ -362,27 +362,39 @@ tree = parse("data.xml")   # forbids DTDs and external entities by default
 
 ## Interviewer probes
 
-Mid: "Why would you ever need a parameter entity instead of a regular entity for exfiltration?"
+**Why would you ever need a parameter entity instead of a regular entity for exfiltration?**
+
+Mid: Because parameter entities are declared with `%` and expand only inside the DTD, so they're the mechanism for referencing entities there instead of in the document body.
 
 Principal: General entities (`&x;`) only work inside the document body, so they drive in-band reads where the response is reflected back to you. Parameter entities (`%x;`) work only inside the DTD, which is exactly what you need to build a dynamic declaration for blind or OOB exfiltration, and hardening frequently blocks general external entities while leaving parameter entities untouched. Reaching for parameter entities by reflex on any blind target is the senior tell.
 
-Mid: "For the blind exfiltration technique, why does the malicious DTD have to be hosted externally instead of just inlined in the document?"
+**For the blind exfiltration technique, why does the malicious DTD have to be hosted externally instead of just inlined in the document?**
+
+Mid: Parameter entities that reference each other for the exfiltration chain need an external DTD to work correctly, so hosting it on our own server is the standard approach.
 
 Principal: Because the XML specification only permits a parameter entity to be used inside the definition of another parameter entity within an external DTD subset, not an internal one. That nested "entity inside another entity's definition" construction is exactly what the exfiltration chain needs to build a dynamic URL out of file contents, so it's structurally impossible to do inline. That's also why, when egress is fully blocked, the fallback is repurposing a DTD file that already exists on disk and exploiting the loophole that an internal DTD can redefine an entity an external DTD declared.
 
-Mid: "We found a billion-laughs style payload in a pentest report. How severe is that compared to a file-read XXE?"
+**We found a billion-laughs style payload in a pentest report. How severe is that compared to a file-read XXE?**
+
+Mid: It's lower severity, it's a denial-of-service issue from exponential entity expansion eating memory and CPU, not a data-disclosure issue like a file-read.
 
 Principal: Different category entirely, it's denial of service, not data theft, and conflating the two is a junior tell. It's also worth knowing it needs no external anything: it's pure internal entity expansion, so it works even against a parser that has external entities and DTD loading fully disabled unless there's also an entity-expansion limit.
 
-Mid: "If we can't fully disable DTDs, can we just regex-strip `<!DOCTYPE`, `<!ENTITY`, and `SYSTEM` before the document reaches the parser?"
+**If we can't fully disable DTDs, can we just regex-strip `<!DOCTYPE`, `<!ENTITY`, and `SYSTEM` before the document reaches the parser?**
+
+Mid: I wouldn't rely on that alone, string-matching on raw XML text is easy to bypass with alternate encodings or formatting, so it shouldn't replace real parser-level hardening.
 
 Principal: That's a common wrong answer and it fails multiple independent ways. Re-encoding the payload as UTF-16 or UTF-7 slips past an ASCII regex while the parser still decodes and processes the DTD. The `PUBLIC` identifier form dodges a filter keyed only on `SYSTEM`. Splitting the declaration across whitespace or comments the parser tolerates but the regex wasn't tuned for gets through too. And a content-type flip routes the payload around a scrubber that only runs on the JSON path. XXE is fixed at the parser, not by blacklisting keywords, because every lexical filter can be encoded around.
 
-Mid: "We disabled external entities on our parser. Are we done?"
+**We disabled external entities on our parser. Are we done?**
+
+Mid: That covers the main file-read and SSRF risk, since it stops the parser from fetching external URIs, so it's a solid baseline mitigation.
 
 Principal: That's a partial fix. It stops file reads and SSRF via external entities, but parameter-entity-driven DoS can still get through, and on some parsers local DTD repurposing still works because the DTD-loading machinery itself is still enabled. Forbidding the `DOCTYPE` entirely, `disallow-doctype-decl` or the platform equivalent, is strictly stronger and is the actual baseline recommendation.
 
-Mid: "Our main API doesn't accept XML, so we don't need to worry about XXE, correct?"
+**Our main API doesn't accept XML, so we don't need to worry about XXE, correct?**
+
+Mid: Not entirely, other features like file uploads or document converters might still parse XML formats such as SVG or DOCX under the hood.
 
 Principal: The highest-value real-world XXE is rarely the obvious XML API. It's an SVG or DOCX/XLSX upload that gets rasterized or converted server-side, a SAML assertion sitting in the auth path, or a JSON endpoint that also happens to parse XML if you flip the `Content-Type` header. Naming those hidden sinks, not just the documented API, is what separates a staff-level answer from someone who only checks the obvious entry point.
 

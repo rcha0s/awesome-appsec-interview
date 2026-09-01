@@ -198,29 +198,53 @@ Adversarial evaluation before shipping: run [garak](https://github.com/NVIDIA/ga
 
 ## Interviewer probes
 
-Q1. Why is datamarking usually stronger than delimiting?
-Mid: "The marker is everywhere, not just at the edges." Principal: delimiting is a boundary-only invariant that fails under closing-sequence smuggling; datamarking distributes the marker over the entire span, so partial ejection still leaves the middle syntactically marked and the model's RLHF refusal keeps firing. The Spotlighting paper reports datamarking outperforming delimiting across its evaluation datasets; delimiter smuggling is a known failure class in the Indirect Prompt Injection paper, arXiv:2302.12173.
+**Why is datamarking usually stronger than delimiting?**
 
-Q2. When would you not use encoding?
-Mid: "When it hurts task quality." Principal: base64 encoding degrades utility on weaker or non-frontier models that cannot reliably decode; the paper documents measurable degradation on downstream QA. If downstream tools consume the model output as data (e.g., a JSON-mode tool), you may re-introduce the payload legibly on the tool side. Pick datamarking for GPT-3.5-class deployments and reserve encoding for GPT-4-class where the utility cost is acceptable.
+Mid: The marker is spread through the whole span instead of sitting only at the edges, so it's harder for an attacker to erase it all.
 
-Q3. If Spotlighting drops ASR significantly but not to zero, why is that not sufficient?
-Mid: "Because non-zero means it still fails sometimes." Principal: any residual ASR on your production distribution cashes out to whatever your most privileged tool can do (RCE, ATO, exfil); the paper's numbers are on their test set, not yours; adversarial payloads drift. The correct answer stacks Spotlighting with the Dual-LLM pattern and capability gating (CaMeL, arXiv:2503.18813).
+Principal: delimiting is a boundary-only invariant that fails under closing-sequence smuggling; datamarking distributes the marker over the entire span, so partial ejection still leaves the middle syntactically marked and the model's RLHF refusal keeps firing. The Spotlighting paper reports datamarking outperforming delimiting across its evaluation datasets; delimiter smuggling is a known failure class in the Indirect Prompt Injection paper, arXiv:2302.12173.
 
-Q4. How would an attacker defeat datamarking specifically?
-Mid: "Guess the marker character." Principal: preinject the marker character across their payload so the "everywhere-marked = data" cue is diluted; or use short strong imperatives that the base model obeys through the marker anyway (paper limitations); or split the payload across multiple retrieved spans so no single span is obviously malicious. Rotate the marker per request from a keyed HKDF derivation off the request ID, and validate at ingest that the source span did not already contain the marker.
+**When would you not use encoding?**
 
-Q5. Where does Spotlighting sit relative to instruction hierarchy fine-tuning?
-Mid: "They both prevent injection." Principal: Spotlighting is prompt-shape (input-side, model-agnostic, deployable today); the Instruction Hierarchy paper (arXiv:2404.13208, April 2024) is weight-level and requires model retraining. They compose: Spotlighting marks the span, hierarchy makes the system-prompt directive that "marked spans are data" harder to override. Neither replaces least-privilege tools. Also note that mid-level answers do not distinguish Spotlighting from instruction hierarchy fine-tuning; principal answers know they are complementary: Spotlighting shapes the input, instruction hierarchy shapes the weights.
+Mid: When the downstream task needs the model to actually read and reason over the untrusted text closely, since base64 adds decode overhead and risk of error.
 
-Q6. Your agent fetches a PDF that contains an injection. Spotlighting is on datamarking mode. Walk me through the paths the attack can still succeed on.
-Mid: "The model might still obey." Principal: (a) strong-imperative bypass through the marker (paper residual class); (b) two-hop propagation where the model's summary of the marked span becomes trusted input on the next call; (c) marker preinjection if the marker is static across the tenant; (d) tool-call arguments that inherit substrings from the untrusted span verbatim; (e) operator-side disable when utility on some content type is bad. Mitigations: rotate marker, hop-level trust downgrade on every derived span, output-side canary checks, immutable Spotlight config with audit.
+Principal: base64 encoding degrades utility on weaker or non-frontier models that cannot reliably decode; the paper documents measurable degradation on downstream QA. If downstream tools consume the model output as data (e.g., a JSON-mode tool), you may re-introduce the payload legibly on the tool side. Pick datamarking for GPT-3.5-class deployments and reserve encoding for GPT-4-class where the utility cost is acceptable.
 
-Q7. How do you evaluate Spotlighting in production, not just on the paper's test set?
-Mid: "Run garak." Principal: (a) garak's prompt-injection probes as a floor; (b) a rotating adversarial corpus mined from your own retrieval traffic (real attacker attempts, not synthetic); (c) canary insertion at ingest with alerting on canary presence in any tool-call argument; (d) shadow-mode A/B where a subset of traffic runs without Spotlighting and ASR delta is measured; (e) MITRE ATLAS AML.T0051 mapping so evaluation feeds a common threat model. Report ASR as a rolling metric, not a one-time number. Mid-level answers evaluate on a fixed test set and quote the paper's numbers as their own; principal answers acknowledge that ASR is highly test-set-dependent and evaluation must be continuous.
+**If Spotlighting drops ASR significantly but not to zero, why is that not sufficient?**
 
-Q8. If Spotlighting is prompt-preprocessing, is it a control the model can bypass?
-Mid: "No, it happens before the model." Principal: the transformation is outside the model, but the enforcement (refusal to obey marked content) happens inside the model. So yes, the model can bypass it; the paper is honest about this in its limitations. This is why Spotlighting cannot be your terminal control on the tool-call path; the terminal control has to be an authorization check that does not depend on the model's cooperation. OWASP LLM Top 10 2025 LLM06, NIST SP 800-53 AC-6. Mid-level answers also frequently claim Spotlighting "prevents" indirect prompt injection; principal answers state the residual-failure classes and stack Spotlighting with Dual-LLM, CaMeL, and least-privilege tools.
+Mid: A nonzero attack success rate means some fraction of attacks still get through, so you can't treat it as a complete fix.
+
+Principal: any residual ASR on your production distribution cashes out to whatever your most privileged tool can do (RCE, ATO, exfil); the paper's numbers are on their test set, not yours; adversarial payloads drift. The correct answer stacks Spotlighting with the Dual-LLM pattern and capability gating (CaMeL, arXiv:2503.18813).
+
+**How would an attacker defeat datamarking specifically?**
+
+Mid: Insert the marker character themselves into the payload so it blends in with the legitimate marking.
+
+Principal: preinject the marker character across their payload so the "everywhere-marked = data" cue is diluted; or use short strong imperatives that the base model obeys through the marker anyway (paper limitations); or split the payload across multiple retrieved spans so no single span is obviously malicious. Rotate the marker per request from a keyed HKDF derivation off the request ID, and validate at ingest that the source span did not already contain the marker.
+
+**Where does Spotlighting sit relative to instruction hierarchy fine-tuning?**
+
+Mid: They're separate defenses that both aim to stop the model from obeying injected instructions.
+
+Principal: Spotlighting is prompt-shape (input-side, model-agnostic, deployable today); the Instruction Hierarchy paper (arXiv:2404.13208, April 2024) is weight-level and requires model retraining. They compose: Spotlighting marks the span, hierarchy makes the system-prompt directive that "marked spans are data" harder to override. Neither replaces least-privilege tools. Also note that mid-level answers do not distinguish Spotlighting from instruction hierarchy fine-tuning; principal answers know they are complementary: Spotlighting shapes the input, instruction hierarchy shapes the weights.
+
+**Your agent fetches a PDF that contains an injection. Spotlighting is on datamarking mode. Walk me through the paths the attack can still succeed on.**
+
+Mid: The model could still follow the injected instructions despite the marking, since Spotlighting only reduces the chance of obedience, it doesn't eliminate it.
+
+Principal: (a) strong-imperative bypass through the marker (paper residual class); (b) two-hop propagation where the model's summary of the marked span becomes trusted input on the next call; (c) marker preinjection if the marker is static across the tenant; (d) tool-call arguments that inherit substrings from the untrusted span verbatim; (e) operator-side disable when utility on some content type is bad. Mitigations: rotate marker, hop-level trust downgrade on every derived span, output-side canary checks, immutable Spotlight config with audit.
+
+**How do you evaluate Spotlighting in production, not just on the paper's test set?**
+
+Mid: Run an automated prompt-injection scanner like garak against your deployment and compare attack success rate with and without Spotlighting enabled.
+
+Principal: (a) garak's prompt-injection probes as a floor; (b) a rotating adversarial corpus mined from your own retrieval traffic (real attacker attempts, not synthetic); (c) canary insertion at ingest with alerting on canary presence in any tool-call argument; (d) shadow-mode A/B where a subset of traffic runs without Spotlighting and ASR delta is measured; (e) MITRE ATLAS AML.T0051 mapping so evaluation feeds a common threat model. Report ASR as a rolling metric, not a one-time number. Mid-level answers evaluate on a fixed test set and quote the paper's numbers as their own; principal answers acknowledge that ASR is highly test-set-dependent and evaluation must be continuous.
+
+**If Spotlighting is prompt-preprocessing, is it a control the model can bypass?**
+
+Mid: Not really, since the marking happens in the pipeline before the prompt ever reaches the model.
+
+Principal: the transformation is outside the model, but the enforcement (refusal to obey marked content) happens inside the model. So yes, the model can bypass it; the paper is honest about this in its limitations. This is why Spotlighting cannot be your terminal control on the tool-call path; the terminal control has to be an authorization check that does not depend on the model's cooperation. OWASP LLM Top 10 2025 LLM06, NIST SP 800-53 AC-6. Mid-level answers also frequently claim Spotlighting "prevents" indirect prompt injection; principal answers state the residual-failure classes and stack Spotlighting with Dual-LLM, CaMeL, and least-privilege tools.
 
 ## War story
 

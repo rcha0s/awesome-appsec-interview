@@ -240,31 +240,45 @@ Reference: OWASP SSRF Prevention Cheat Sheet<sup>[[4]](#ref4)</sup> (Case 1 allo
 
 ## Interviewer probes
 
-Mid: "We block requests to 127.0.0.1 and 169.254.169.254, doesn't that close off SSRF to internal targets?"
+**We block requests to 127.0.0.1 and 169.254.169.254, doesn't that close off SSRF to internal targets?**
+
+Mid: Not fully. You'd want to allowlist the specific destinations the feature is allowed to reach rather than trying to blocklist known-bad addresses, since an attacker can just supply a different internal IP or hostname.
 
 Principal: That's the junior answer, and denylists like that die immediately to decimal, octal, hex, and IPv6 encodings of the same address, to DNS names that simply resolve inward, to redirects, and to parser confusion between the validator and the fetcher. The correct posture is allowlisting exact destinations, or when that's impossible, resolve-then-pin plus a proper is-global deny check, not a regex against known-bad literal strings.
 
-Mid: "We validate the URL before fetching it, so we should be safe from an attacker pointing us at an internal address, right?"
+**We validate the URL before fetching it, so we should be safe from an attacker pointing us at an internal address, right?**
+
+Mid: Mostly, as long as the app doesn't then follow a redirect from that validated URL to somewhere else, since the redirect target wouldn't go through the same check.
 
 Principal: Only if you pin the resolved IP and re-validate on every redirect hop. Otherwise DNS rebinding is a straightforward bypass: the attacker's DNS answers with a public IP on the validation lookup and an internal IP on the connect a moment later, since validate-then-fetch designs do two separate resolutions with an attacker-controlled name in between. A 3xx response to an internal target walks through the same gap if the client follows redirects. Naming that TOCTOU explicitly is what separates a real answer from a plausible-sounding one.
 
-Mid: "We found a blind SSRF where we can't see the response body. Is that lower severity than one where we can?"
+**We found a blind SSRF where we can't see the response body. Is that lower severity than one where we can?**
+
+Mid: No, it's still exploitable. You just prove it with an out-of-band tool like Burp Collaborator instead of reading the response directly.
 
 Principal: No. Blind SSRF still steals IAM credentials and drives the gopher-to-Redis RCE chain; you just confirm it with OOB or timing instead of a reflected body. It's also worth knowing that a DNS-only callback with no follow-up HTTP hit is the expected signal when egress HTTP is filtered but DNS still resolves, so don't conclude "not vulnerable" just because only a DNS lookup arrives.
 
-Mid: "What's the actual difference between IMDSv1 and IMDSv2, and why does it matter for SSRF?"
+**What's the actual difference between IMDSv1 and IMDSv2, and why does it matter for SSRF?**
+
+Mid: IMDSv2 requires first sending a PUT request to get a session token and then including that token on the GET, whereas IMDSv1 just answers a plain GET, so an SSRF that can only make simple GET requests can't pull credentials from IMDSv2 the way it could from IMDSv1.
 
 Principal: IMDSv2 turns credential retrieval into a session flow: a `PUT` to `/latest/api/token` returns a token, and every subsequent `GET` must carry that token in a custom header, with a default response hop limit of 1. A plain GET-only SSRF primitive can't mint the token, so it can't read v2 credentials, full stop. That's also why header-gated clouds like GCP and Azure make "can the SSRF primitive set a request header" a real exploitability question rather than a formality; on AWS IMDSv1 no header is needed at all, which is why it's the softer target. The fix is migrating and setting `HttpTokens=required`, not a WAF rule keyed on the metadata IP.
 
-Mid: "Gopher is blocked at the edge. Can you still get to Redis?"
+**Gopher is blocked at the edge. Can you still get to Redis?**
+
+Mid: Possibly, by trying other raw-socket schemes like `dict://`, or by checking whether the app's outbound requests can be crafted to reach the Redis port some other way.
 
 Principal: If the HTTP client is one of the historical CRLF-permissive parsers (older curl, PHP streams, pre-CVE-2016-5699 Python `urllib`), yes: a plain `http://target/%0d%0aCONFIG%20SET%20dir%20/var/spool/cron/%0d%0a...` decodes the percent-encoded CR/LF and splices raw newlines into the request line, driving the same Redis inline-protocol chain over `http://` with no exotic scheme required. The fix is a client that rejects CR/LF in the request target, plus a validator that rejects control characters after full decoding, not more scheme filtering.
 
-Mid: "Your product exports user-submitted HTML or SVG content to PDF. Walk me through the SSRF surface there."
+**Your product exports user-submitted HTML or SVG content to PDF. Walk me through the SSRF surface there.**
+
+Mid: The renderer will fetch whatever resources are referenced in tags like `<img>` or `<iframe>`, so you'd want to strip or sanitize those references and disable local file access before rendering attacker-supplied content.
 
 Principal: The renderer's DOM is the sink, not the submitted document's URL fields. `<iframe>`, `<object>`, `<link rel=stylesheet>`, `<img>`, and SVG `<image xlink:href>` all trigger server-side fetches whose responses get baked directly into the output PDF or PNG, so a headless rendering pipeline gives you a reflected read even when the export flow never returns anything to the submitter directly. The fix has to work at three layers: strip external subresource tags at the markup layer, disable `file://` and local file access at the renderer flag layer, and put the renderer on a network segment that can't reach metadata or internal admin planes. Filtering URLs in the submitted document alone is not sufficient, because the attacker controls the entire DOM the renderer loads.
 
-Mid: "We pin the resolved IP to defeat DNS rebinding. Does that fully close the gap?"
+**We pin the resolved IP to defeat DNS rebinding. Does that fully close the gap?**
+
+Mid: Pinning the IP stops the DNS rebinding trick itself, since the socket connects to the address that was already validated instead of resolving the name again.
 
 Principal: Pinning one `connect()` is necessary but not sufficient. If the outgoing `Host` header still names the attacker's hostname, a virtual-hosted internal backend or reverse proxy can still route by `Host` and reach an unintended target even though the socket connected to the pinned IP. A keep-alive connection pool can also reuse a socket for a second logical request without a fresh `getaddrinfo`, silently skipping validation the design assumed would re-run. And on redirect, the new hop needs its own resolve-validate-pin cycle rather than reusing any state from the first. The actual invariant is one resolve, one is-global validation, one connect, one rewritten Host header, per hop, every hop.
 

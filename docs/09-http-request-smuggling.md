@@ -300,27 +300,39 @@ The body is treated by the server as the start of the victim's next request on t
 
 ## Interviewer probes
 
-Mid: "Both the front-end and back-end support `Transfer-Encoding: chunked` and there's no header obfuscation. Is smuggling ruled out here?"
+**Both the front-end and back-end support `Transfer-Encoding: chunked` and there's no header obfuscation. Is smuggling ruled out here?**
+
+Mid: No. Even with both sides recognizing the header, they can still parse the chunked body itself differently, so I wouldn't call it safe without testing the chunk grammar too.
 
 Principal: No. Header-level agreement on `Transfer-Encoding` is only the first layer; the chunk grammar underneath is itself ambiguous under lenient parsing. Chunk extensions, leading zeros or a `0x` prefix on chunk sizes, case differences in hex, oversized sizes that truncate on one side and not the other, and trailer headers after the terminating `0\r\n` are all places two compliant-looking parsers can still disagree on where the request ends. TE.TE isn't solved by both sides recognizing the header; you have to test the body grammar too.
 
-Mid: "The origin was recently migrated to speak HTTP/2 end to end. Does that close out request smuggling as a risk here?"
+**The origin was recently migrated to speak HTTP/2 end to end. Does that close out request smuggling as a risk here?**
+
+Mid: Not by itself. I'd want to confirm nothing in the path still downgrades to HTTP/1.1, since that's where the length-ambiguity comes back.
 
 Principal: Only if there's no downgrade anywhere in the chain. HTTP/2 framing carries an explicit length per DATA frame, so true end-to-end H2 has no length ambiguity, but most real deployments have an H2 front-end that re-serializes each request into HTTP/1.1 for an origin that only speaks HTTP/1. That downgrade step reintroduces the exact same ambiguity, H2.CL and H2.TE, and can make a site that was previously safe newly vulnerable. "We're on HTTP/2 now" is not sufficient without checking whether anything downstream still speaks HTTP/1.
 
-Mid: "There's a WAF and strict access-control rules in front of the origin. Doesn't that reduce the impact even if smuggling is possible?"
+**There's a WAF and strict access-control rules in front of the origin. Doesn't that reduce the impact even if smuggling is possible?**
+
+Mid: Not much. The WAF only inspects the outer request it can see, so a request smuggled inside it never gets evaluated by those controls.
 
 Principal: It often makes it worse, not better. The WAF and front-end access controls inspect the outer request; the back-end parses and acts on the smuggled request hiding inside it, which the front-end never saw as a separate request at all. A CDN or WAF in front becomes an amplifier for the trust the back-end places in "anything that came through the front-end," not a shield against the technique, because smuggling is specifically designed to slip past front-end inspection.
 
-Mid: "This target is confirmed CL.TE vulnerable. What's the safe way to also test whether it's TE.CL?"
+**This target is confirmed CL.TE vulnerable. What's the safe way to also test whether it's TE.CL?**
+
+Mid: Send a timing probe that makes the back-end wait on extra body bytes and see if the response is delayed: a hang or timeout confirms it.
 
 Principal: Run the CL.TE timing probe first, not the TE.CL one. On a CL.TE target, sending a TE.CL-style probe can genuinely corrupt or hang a real user's request because you're intentionally causing the back-end to wait on bytes that never arrive. The CL.TE timing test, `Transfer-Encoding: chunked` with `Content-Length: 4` and a body that leaves the back-end waiting for another chunk, gets you a measurable delay without touching another user's traffic, so it has to come first in the probing order.
 
-Mid: "The team disabled back-end connection reuse after the last smuggling finding. Is that the fix?"
+**The team disabled back-end connection reuse after the last smuggling finding. Is that the fix?**
+
+Mid: It's a solid mitigation. Without a shared connection there's no other victim's request for a smuggled prefix to attach to.
 
 Principal: It's a mitigation, not the fix. Disabling reuse removes the shared channel that classic prefix-smuggling and response-queue poisoning need, since there's no longer a victim sharing your poisoned connection. But it does nothing against request tunnelling, where the front-end still opens one upstream socket per client request and the attacker gets the front-end to write two requests down their own socket. There's no victim in that variant, but internal headers and gated paths are still reachable through it. Disabling reuse blunts one branch of the vulnerability, not the class.
 
-Mid: "You've smuggled a full standalone request instead of just a prefix. Does that materially change the impact?"
+**You've smuggled a full standalone request instead of just a prefix. Does that materially change the impact?**
+
+Mid: Yes, it's more severe. A complete request gets its own response from the back-end, so it can throw off which response goes to which client.
 
 Principal: Yes, it's a different impact tier entirely. A smuggled prefix corrupts the next request on the connection, affecting one victim. A full standalone smuggled request desynchronizes the response queue itself: the back-end now has one more response queued than the front-end expects, so every subsequent response on that connection gets handed to the wrong client until the connection is torn down. That's not "the next user," that's arbitrary response theft, including session cookies, for the life of the poisoned connection, which is closer to full-site compromise than a single corrupted request.
 

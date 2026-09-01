@@ -242,35 +242,51 @@ Ordered by effectiveness within each group.
 
 ## Interviewer probes
 
-Mid: "We switched from sequential integer IDs to UUIDs on our object endpoints. Doesn't that close the IDOR risk?"
+**We switched from sequential integer IDs to UUIDs on our object endpoints. Doesn't that close the IDOR risk?**
+
+Mid: Not fully. UUIDs just make the identifier hard to guess, so we still need a server-side check that the requesting user actually owns the object.
 
 Principal: No, unpredictability is not authorization. OWASP recommends random GUIDs as hardening in addition to per-object checks, never as a replacement for them. Other users' GUIDs leak constantly through messages, reviews, audit trails, JSON:API `included` relationships, email footers, and separate listing endpoints, and once a GUID leaks the object is accessed exactly like a sequential ID: the request still has no ownership check behind it. The fix is still `resource.owner == currentUser` at the point of access, not the shape of the identifier.
 
-Mid: "The endpoint checks that the caller is logged in and even compares the session's user ID to the ID in the request. Is that sufficient authorization?"
+**The endpoint checks that the caller is logged in and even compares the session's user ID to the ID in the request. Is that sufficient authorization?**
+
+Mid: It covers the common case where a user is only trying to reach their own record, but it doesn't account for shared resources, delegated access, or role-based permissions.
 
 Principal: It's necessary but not sufficient, and conflating the two is the most common tell of a weak answer. Authentication confirms who the user is; it says nothing about whether that user is permitted for this object or this function. Comparing the session-user-ID to the request's ID param covers the narrow "is this my own record" case, but it misses shared objects, delegated access, org hierarchies, and role-based object permissions. Real authorization consults a policy considering the user's roles and hierarchy, not a single equality check, which is exactly why ABAC/ReBAC rules are preferred over ad hoc ID comparisons.
 
-Mid: "What's the actual difference between BOLA and BFLA? Isn't that just API terminology for the same bug?"
+**What's the actual difference between BOLA and BFLA? Isn't that just API terminology for the same bug?**
+
+Mid: BOLA is when a user can reach another user's object through an endpoint they're allowed to call; BFLA is when they can call an endpoint, like an admin action, that they shouldn't be allowed to reach at all.
 
 Principal: It's a real distinction with different fixes, not pedantry. BOLA is "wrong object, allowed function": the caller is legitimately allowed to hit the endpoint, but the bug is that ownership of the specific object was never checked, so manipulating the ID reaches someone else's data. BFLA is "wrong function entirely": the caller should never have reached the endpoint at all, regardless of which object they name, because it's an admin or privileged action reachable by a normal user. BOLA is fixed with object-scoped ownership checks; BFLA is fixed with function or role gating, like making admin controllers inherit from an abstract controller that enforces role checks so a new admin action can't ship unauthorized. Naming which one you found, and why the fix differs, signals depth.
 
-Mid: "You find an admin action reachable by a regular user. Whose bug is that, the application's or the platform's?"
+**You find an admin action reachable by a regular user. Whose bug is that, the application's or the platform's?**
+
+Mid: It's the application's bug. There's a missing role check on that endpoint, so we need to add server-side authorization before the action runs.
 
 Principal: Often it's a platform or routing bug wearing an application-security costume. URL-matching and path-normalization discrepancies (case sensitivity, trailing slashes, `%2e`, `;`-parameters) let a gateway or WAF believe a request maps to a safe path while the application router resolves it to the admin route underneath, and override headers like `X-Original-URL`, `X-Rewrite-URL`, and `X-HTTP-Method-Override` let an attacker bypass a front-end rule that only matched one method and path. The senior answer is to normalize the path once and authorize in the application tier itself, rather than trusting an edge WAF rule that a routing quirk can slip past.
 
-Mid: "Mass assignment sounds like an input-validation bug, sending fields the API wasn't expecting. Why do you file it under broken access control?"
+**Mass assignment sounds like an input-validation bug, sending fields the API wasn't expecting. Why do you file it under broken access control?**
+
+Mid: Because the attacker isn't sending malformed input, they're setting fields like `isAdmin` or `role` that the UI never exposed but the framework still binds and saves.
 
 Principal: Because field-level validation of the fields you declared does nothing about the fields you didn't, and the ORM writes them anyway if the controller binds straight to the persistence model. Sending `isAdmin`, `role`, or `balance` in the request body isn't malformed input, it's a well-formed request for a property the UI never exposed, and the framework happily sets it. That's an access-control failure at the property level (BOPLA), not an input-shape problem, which is why the fix is an allowlist DTO, never binding directly to the domain model, rather than a smarter validator. The 2012 GitHub incident, where a user added their own public key to an arbitrary organization via mass assignment and gained commit access to its repositories, is the canonical case for why this is a privilege-escalation bug, not a hygiene nitpick.
 
-Mid: "When a user tries to access an object they're not authorized for, should the server return 403 or 404?"
+**When a user tries to access an object they're not authorized for, should the server return 403 or 404?**
+
+Mid: Return a 403 so it's clear the request was denied for a permissions reason rather than because the object doesn't exist.
 
 Principal: It depends on what you're protecting against, and picking one globally is the wrong answer. A 403 confirms the object exists but the caller isn't permitted, which is honest and good for audit logs, but it's also an oracle: an attacker can enumerate which IDs are real by watching for 403 versus 404. A 404 for both nonexistent and unauthorized-but-existing objects removes that oracle at the cost of debuggability. The senior split is per surface: unauthenticated callers and cross-tenant boundaries get a uniform 404 with rate-limiting on repeated 404s, while same-tenant peer denials can safely use 403. What you must never do is return 200 with an empty body or a 302-to-login with the object already serialized in the pre-redirect response, and response timing has to match between the two branches or the timing itself becomes the oracle.
 
-Mid: "Your app authenticates and authorizes the WebSocket handshake before upgrading the connection. Are you done?"
+**Your app authenticates and authorizes the WebSocket handshake before upgrading the connection. Are you done?**
+
+Mid: Not quite. We should still make sure a client can't subscribe to or act on another user's data once the connection is open.
 
 Principal: No, that only covers the connection's opening moment. Long-lived streaming connections, WebSocket, SSE, gRPC streaming, MQTT, typically authorize once at connect and then keep the socket open for minutes or hours while message-level authorization is skipped entirely. A client can send subscribe or publish frames for other users' topics after connect, since topic names like `user:456:notifications` are IDOR keys in their own right, and a role or token revoked mid-session is still honored until the socket happens to close. The fix is to authorize every inbound frame against the principal and the requested topic, bind the connection to a short-lived token that forces reconnect on expiry or role change, and have server-side hooks consume revocation events to drop live connections.
 
-Mid: "The request carries a valid OAuth token with an `invoices:read` scope, and it's hitting `GET /invoices/{id}`. Is that enough to authorize the read?"
+**The request carries a valid OAuth token with an `invoices:read` scope, and it's hitting `GET /invoices/{id}`. Is that enough to authorize the read?**
+
+Mid: Not by itself. The scope says the client can read invoices in general, but we still need to check that this specific invoice belongs to the token's user.
 
 Principal: No, and treating scope as authorization is a common wrong answer. Scopes are coarse capability grants: they gate which endpoints a client application is allowed to call on a user's behalf, but they say nothing about which specific objects that user owns. `invoices:read` still needs an ownership predicate binding the token's subject to that specific invoice ID, the same gap machine-to-machine API keys have ("the key has admin scope" says nothing about tenant) and delegated or impersonation tokens have (you must record and enforce the acting user, not just the principal). Real authorization consumes scope, principal, and resource together in one policy decision, not scope alone.
 

@@ -211,27 +211,39 @@ A profile page keyed on a `user` parameter (`GET /user/personal-info?user=carlos
 
 ## Interviewer probes
 
-Mid: "You found the app exposes its `Server` header with a version number. Is that a finding?"
+**You found the app exposes its `Server` header with a version number. Is that a finding?**
+
+Mid: Log it and check whether the version is current. If it's outdated it's worth flagging, but a fully patched version by itself usually isn't a real finding.
 
 Principal: Only conditionally, and stating it as a bare finding is the junior tell. Treat technical disclosure as a lead, not a finding: the disclosure of technical information is often only of interest if you can demonstrate how an attacker could do something harmful with it. A version number matters only if it's unpatched and maps to a public exploit; a table or column name matters because it unblocks blind SQL injection; a stack trace matters because it names the deserialization library in use. Report the impact and exploitability chain, not the mere presence of a banner.
 
-Mid: "How do you decide severity when triaging a pile of disclosure findings?"
+**How do you decide severity when triaging a pile of disclosure findings?**
+
+Mid: I look at whether the exposed data is sensitive on its own, like credentials or personal data, versus just technical metadata like a framework name, and rate the former much higher.
 
 Principal: Split by whether the data is directly or indirectly sensitive. Directly-sensitive data (PII, card numbers, credentials, private keys, session tokens) is high severity on exposure alone, no follow-on required. Indirectly-sensitive data (framework/version, directory layout, internal hostnames, parameter names) is a lead whose value depends entirely on what it enables. Don't inflate the second class into a critical finding on its own, but don't dismiss it either. It's frequently the missing puzzle piece for a high-severity chain elsewhere in the assessment.
 
-Mid: "Walk me through a real disclosure-to-exploit chain, start to finish."
+**Walk me through a real disclosure-to-exploit chain, start to finish.**
+
+Mid: A verbose error message can leak a table or column name that you then use to build a more targeted SQL injection payload against that endpoint.
 
 Principal: A verbose SQL error names table and column names, which turns blind SQL injection into targeted injection. A backup file or an exposed `.git` directory hands over source code, which surfaces hardcoded API keys and a roadmap into a deserialization bug that would otherwise be near-impossible to find black-box. A source map hands over hidden admin routes, which becomes an access-control test. A banner and error page fingerprint a framework version, which maps to a CVE and a public PoC. None of those individual leaks is exploitation on its own; the chain is the finding.
 
-Mid: "The app returns a generic error message on every failure path. Is it safe from information disclosure?"
+**The app returns a generic error message on every failure path. Is it safe from information disclosure?**
+
+Mid: Generic error text is a good sign since it means stack traces and internals aren't leaking, but I'd still want to confirm the status codes are consistent across cases too.
 
 Principal: Not necessarily. Even identical-looking error text can leak through the choice of which error case fired: distinct 404-versus-403 behavior, or a difference of a few bytes in response length, or timing, is itself an oracle. The fact that one error case was encountered instead of another is useful in itself, the same mechanic as boolean-blind injection and username enumeration. Fixing the message text isn't enough; the fix is consistency, fail closed, and uniform responses across both the true and false case.
 
-Mid: "What's the modern leak junior testers consistently miss?"
+**What's the modern leak junior testers consistently miss?**
+
+Mid: Source maps. A lot of testers forget to check for exposed `.js.map` files, which can reveal the original, unminified frontend source.
 
 Principal: Source maps and GraphQL introspection. Both hand over the full internal map in a single request: a `.js.map` file reconstructs original unminified source, internal API routes, and feature flags; a GraphQL introspection query returns every type, field, and mutation, including ones the front end never calls. Either one converts black-box guessing into white-box targeting immediately, which is why they're worth checking on every engagement even when nothing else looks promising.
 
-Mid: "Is caching itself an information-disclosure risk, or just a performance concern?"
+**Is caching itself an information-disclosure risk, or just a performance concern?**
+
+Mid: Mostly performance, but headers like `X-Cache` or `Via` can leak some infrastructure details, so it's worth glancing at during recon.
 
 Principal: Both directions matter. Cache and infrastructure headers (`X-Cache`, `Age`, `X-Served-By`, `Via`) leak internal topology, proxy chains, and internal IPs on their own. Separately, a `Cache-Control: public` on an authenticated, user-specific response can cause a shared cache to serve one user's data to another, which is the boundary case with web cache deception. Set correct cache headers (`private, no-store` on authenticated responses) and treat the header surface itself as something an attacker fingerprints during reconnaissance.
 

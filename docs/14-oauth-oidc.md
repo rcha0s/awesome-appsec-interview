@@ -229,27 +229,39 @@ Adopt the hardening RFCs explicitly: **RFC 9700**<sup>[[1]](#ref1)</sup> (OAuth 
 
 ## Interviewer probes
 
-Mid: "Does the `state` parameter protect against a stolen authorization code?"
+**Does the `state` parameter protect against a stolen authorization code?**
+
+Mid: No. `state` is an anti-CSRF token that ties the OAuth callback to the browser session that started the flow; it isn't designed to protect the authorization code itself if it leaks some other way.
 
 Principal: No. `state` binds the callback to the session that started the flow, which stops CSRF-linking (tricking a victim into linking the attacker's social account, or forced login) because the attacker cannot forge a `state` tied to the victim's session. It does nothing against a stolen code leaking via a bad `redirect_uri`, because the attacker mints their own valid `state` from their own browser before the code ever leaks. Conflating the two is the tell; the fix for leakage is exact-match `redirect_uri` validation, not `state`.
 
-Mid: "Why is the authorization code flow considered safer than implicit, if both hand a credential through the browser?"
+**Why is the authorization code flow considered safer than implicit, if both hand a credential through the browser?**
+
+Mid: Because the code is exchanged for the actual access token in a back-channel request to `/token`, so the token itself never has to travel through the browser the way it does with the implicit grant.
 
 Principal: The code itself is worthless without redemption. Even if it leaks via a bad `redirect_uri`, an open redirect, or `Referer`, redeeming it at `/token` requires the `client_secret` (confidential clients) or the PKCE `code_verifier` (public clients), both of which stay off the front channel entirely. An implicit-grant access token has no such gate: whoever has the token bytes can call `/userinfo` immediately. That asymmetry, not "the code is short-lived," is the actual argument, and it's why RFC 9700 deprecates implicit outright.
 
-Mid: "How do you validate a `redirect_uri` so it can't be hijacked?"
+**How do you validate a `redirect_uri` so it can't be hijacked?**
+
+Mid: Require an exact match against a pre-registered `redirect_uri` rather than allowing wildcards, prefix matching, or substring matching.
 
 Principal: Exact string match, nothing looser. Prefix and substring matching are defeated by a domain like `client.com.evil.com`; `@`-in-URL and path-traversal tricks exploit parser disagreement between the component that validates the URL and the component that redirects to it; parameter pollution (`redirect_uri` supplied twice) exploits which one the server reads first. Exact match on the front channel isn't the whole story either: the server should re-check `redirect_uri` again at `/token`, so a code that somehow reached the wrong place still can't be redeemed against a different callback.
 
-Mid: "A request arrives with a valid, correctly signed OAuth access token from your trusted issuer. Is that enough to grant access?"
+**A request arrives with a valid, correctly signed OAuth access token from your trusted issuer. Is that enough to grant access?**
+
+Mid: No. The resource server still needs to check that the token's `aud` and `scope` claims match this API and the requested operation, not just that the signature checks out.
 
 Principal: No. A valid signature only proves who issued the token, not that it was issued for this API or this scope. The resource server still has to check `aud` (was this minted for me specifically) and `scope` (does it cover this operation). Skip either and you get confused-deputy replay: a token minted for service A gets replayed against service B that trusts the same issuer, or an OIDC `id_token`, never meant to authorize API calls, gets accepted as an access token because both are JWTs from the same issuer and only the claims differ.
 
-Mid: "What's the actual difference between OAuth and OIDC?"
+**What's the actual difference between OAuth and OIDC?**
+
+Mid: OAuth is about authorization (letting an app access an API on the user's behalf with a scoped token), while OIDC layers authentication on top, using the `id_token` to tell the app who the user is.
 
 Principal: OAuth is delegated authorization: it lets an app call an API on a user's behalf with a scoped token. OIDC bolts authentication on top via the `id_token`, a signed assertion of who logged in. Every identity-spoofing bug in this doc traces back to blurring that line: using an `access_token` as a proxy for identity, trusting an unverified email claim to link accounts, or treating "the user completed an OAuth flow" as proof of who they are without validating the `id_token`'s signature and claims.
 
-Mid: "Your app supports login via multiple identity providers. What's the risk in that specifically?"
+**Your app supports login via multiple identity providers. What's the risk in that specifically?**
+
+Mid: With a shared callback URL across providers, the client can end up confused about which IdP actually issued a given response, so it should verify the response came from the provider it expects rather than assuming.
 
 Principal: IdP mix-up. The user clicks "log in with HonestIdP," but something upstream (a manipulated selection page, attacker-controlled client state) leaves the client believing it's mid-flow with EvilIdP while the browser is genuinely talking to HonestIdP. The user authenticates normally and the browser delivers a legitimate code to the client's callback. The client, believing it's talking to EvilIdP, sends that code (and possibly a secret) to EvilIdP's token endpoint, handing the attacker a code minted by a real IdP for a real user. The fix is RFC 9207: the AS includes an `iss` parameter in the callback, and the client verifies it matches the IdP it thinks this flow belongs to before touching `/token`. A single callback URL shared across multiple IdPs with no `iss` check is the vulnerable shape, and it's a common gap even in mature deployments.
 

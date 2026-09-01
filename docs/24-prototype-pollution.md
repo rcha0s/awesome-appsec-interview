@@ -240,27 +240,39 @@ Ordered by robustness. The structural fixes (1 to 3) beat blocklisting.
 
 ## Interviewer probes
 
-Mid: "A defense strips any key literally named `__proto__` from user input. Is that sufficient?"
+**A defense strips any key literally named `__proto__` from user input. Is that sufficient?**
+
+Mid: No. An attacker can reach the same prototype via `constructor.prototype` instead of `__proto__`, so a filter on the literal string alone won't catch it.
 
 Principal: No, `__proto__` and `constructor.prototype` are two doors to the same room, they both resolve to `Object.prototype`. Blocking only the string `__proto__` is defeated by reaching the same object through `constructor[prototype][x]`, which never uses the word `__proto__` at all. Any defense has to cover both paths, which is exactly why null-prototype objects and freezing `Object.prototype` are stronger than a string filter: they close the room itself rather than trying to guard every door into it.
 
-Mid: "Does `{__proto__: {evil: true}}` written directly in JavaScript pollute the prototype?"
+**Does `{__proto__: {evil: true}}` written directly in JavaScript pollute the prototype?**
+
+Mid: No, in an object literal `__proto__` is special syntax that sets the new object's prototype rather than creating an own property, so it doesn't touch `Object.prototype`.
 
 Principal: No, and that distinction matters for finding real sources. An object literal with a `__proto__` key uses the setter, so it sets the object's prototype rather than creating an own property; `hasOwnProperty('__proto__')` returns false. `JSON.parse('{"__proto__": {...}}')` is different: `JSON.parse` treats every key as a plain string, so it produces a real own `__proto__` property. That own property is exactly what a downstream recursive merge acts on, which is why JSON request bodies are the prime source for this class, not object literals in application code.
 
-Mid: "You've confirmed you can pollute `Object.prototype` on this target. Is that a finding by itself?"
+**You've confirmed you can pollute `Object.prototype` on this target. Is that a finding by itself?**
+
+Mid: Not really. Pollution alone doesn't do anything until some code actually reads the polluted property and uses it somewhere sensitive, so you need to show a gadget and a sink too.
 
 Principal: On its own, it's a primitive, not an exploit. Impact requires three things: a source that writes to the prototype, a gadget, an inheritable property the app reads unsafely and treats as trusted, and a sink where that value does damage. A property defined directly on an object as its own property shadows anything polluted on the prototype, so only properties the developer left undefined are exploitable gadgets. Null-prototype objects have no inheritable gadgets at all, which is why they're a structural fix rather than a filter. Report pollution alongside a concrete gadget and sink, or explain why none was found, not as a bare confirmation.
 
-Mid: "How do you confirm server-side pollution landed, without a debugger on the remote Node process?"
+**How do you confirm server-side pollution landed, without a debugger on the remote Node process?**
+
+Mid: Send a payload with a `__proto__` key and see if the injected value gets reflected back anywhere in the app's response, such as in a `for...in` loop over an object.
 
 Principal: Exploit the asymmetry in `for...in` enumeration: it walks inherited enumerable properties, and native built-ins on `Object.prototype` are non-enumerable while an attacker's assignment is enumerable by default. So a `for...in` serialization that echoes an injected key back in the response confirms pollution landed, without needing to inspect the heap. That's also why the non-destructive black-box techniques (status code override, JSON spaces override, charset override) are designed as safe, reversible probes rather than crashing real properties, a server pollution persists for the whole process lifetime with no page refresh to reset it.
 
-Mid: "What's the actual severity ceiling difference between client-side and server-side prototype pollution?"
+**What's the actual severity ceiling difference between client-side and server-side prototype pollution?**
+
+Mid: Client-side pollution usually only gets you DOM XSS, but server-side pollution can be worse because Node backends sometimes spawn child processes, and a polluted option passed into one can lead to remote code execution.
 
 Principal: Client-side tops out at DOM XSS, gadget chains that build a script `src` or similar DOM sink from a polluted config value. Server-side can reach full remote code execution through `child_process` gadgets whose options (`shell`, `NODE_OPTIONS`, `execArgv`) are left undefined by developers and get inherited from the polluted prototype. That's a materially higher ceiling, and it's why server-side prototype pollution deserves a different severity rating than the client-side class even though the underlying primitive, a source writing into `Object.prototype`, is identical.
 
-Mid: "Any reason to be careful testing for prototype pollution against a production Node server?"
+**Any reason to be careful testing for prototype pollution against a production Node server?**
+
+Mid: Yes, polluting the wrong property could break something or crash the app, so where possible it's safer to test against a non-production environment first.
 
 Principal: Yes. Unlike the browser, where a page refresh resets any pollution, server-side pollution persists for the entire process lifetime. Polluting a property the runtime or app actually relies on, or injecting a value of the wrong type, frequently crashes Node or breaks functionality, and a single test request can take the server down with no natural reset. That's exactly why the accepted black-box methodology favors safe, reversible probes (reflection via `for...in`, a status-code override that's easy to unset, a JSON-indentation toggle) over blindly polluting real properties to see what breaks.
 

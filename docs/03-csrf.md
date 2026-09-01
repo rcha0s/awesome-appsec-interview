@@ -187,27 +187,39 @@ Mitigations: turn off HTTP compression on responses that carry secrets, mask the
 
 ## Interviewer probes
 
-Mid: "The session cookie is SameSite=Lax by default now, so are we covered on CSRF?"
+**The session cookie is SameSite=Lax by default now, so are we covered on CSRF?**
+
+Mid: SameSite=Lax blocks most cross-site form and link-based CSRF automatically, so it covers the common case.
 
 Principal: No, it's a mitigation, not a substitute for tokens. SameSite=Lax does nothing for state changes reachable by GET, doesn't apply if the cookie was explicitly set `SameSite=None`, and is defeated by same-site subdomain compromise (an XSS or open redirect on a sibling subdomain counts as same-site and rides straight past the check). It kills the cheap, generic CSRF attacks for free; it doesn't replace an actual proof-of-intent token for anything sensitive.
 
-Mid: "Can we just check the Referer header instead of implementing CSRF tokens?"
+**Can we just check the Referer header instead of implementing CSRF tokens?**
+
+Mid: Referer checking can work as a lightweight substitute: compare the Referer header's host to the expected domain and reject mismatches.
 
 Principal: Referer-based validation is structurally weaker than tokens because it fails open: most implementations skip the check entirely when the header is absent, and an attacker can strip it with `<meta name="referrer" content="no-referrer">` on their own page. The matching logic that's left is also commonly bypassable with substring checks. Tokens don't have an "absent" failure mode that defaults to allow.
 
-Mid: "If a request is same-site, does that mean SameSite cookie protections and CSRF defenses see it as safe?"
+**If a request is same-site, does that mean SameSite cookie protections and CSRF defenses see it as safe?**
+
+Mid: Yes. Same-site means the request comes from the same registrable domain, so SameSite cookies are sent and it's treated as trusted.
 
 Principal: Same-site (eTLD+1, scheme-aware) is not the same thing as same-origin (scheme, host, and port all matching), and conflating them is the tell. A cross-origin request can still be same-site, which is exactly why a subdomain compromise defeats SameSite cookie protection even though the browser treats it as "safe." It also cuts the other way: `http://example.com` to `https://example.com` is cross-site, because the scheme differs, even though a naive reading would call that "the same site."
 
-Mid: "We have a permissive CORS policy for our API. Does that create any CSRF risk?"
+**We have a permissive CORS policy for our API. Does that create any CSRF risk?**
+
+Mid: A permissive CORS policy mainly risks data exposure to other origins, not CSRF, since CSRF is about forged requests, not response reading.
 
 Principal: CORS doesn't protect against CSRF at all, and a permissive policy makes CSRF strictly worse. CORS governs whether a cross-origin script can read the response; state-changing requests fire regardless of the CORS policy. If the policy reflects arbitrary origins with credentials enabled, you've additionally handed the attacker the ability to read back the authenticated response, which turns a blind forgery into one where the attacker can chain off the result.
 
-Mid: "The session cookie is HttpOnly. Does that give us any protection against CSRF?"
+**The session cookie is HttpOnly. Does that give us any protection against CSRF?**
+
+Mid: HttpOnly stops JavaScript from reading the cookie, so it should reduce our CSRF exposure.
 
 Principal: No, HttpOnly and CSRF address unrelated attacker capabilities. CSRF doesn't require the attacker to read the cookie; the browser attaches it automatically regardless of who triggered the request. HttpOnly's value is against XSS-driven cookie theft, a completely different attack. A candidate who cites HttpOnly as a CSRF control is confusing the two threat models.
 
-Mid: "We just shipped CSRF tokens on every state-changing endpoint. Are we done?"
+**We just shipped CSRF tokens on every state-changing endpoint. Are we done?**
+
+Mid: Yes, if the tokens are validated server-side on every mutating request and tied to the session, that closes off CSRF.
 
 Principal: Not if there's an XSS bug anywhere on the origin. Script running in the page can read the CSRF token straight out of the DOM or a same-origin response and attach it to a forged request itself, which nullifies every defense on this list simultaneously. "We have CSRF tokens" is not a valid answer to an XSS finding, and conversely, an unpatched XSS bug is also a live CSRF bug regardless of how strong the token implementation is.
 
