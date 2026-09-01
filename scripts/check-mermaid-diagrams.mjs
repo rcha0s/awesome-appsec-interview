@@ -93,7 +93,14 @@ async function main() {
   const server = await startMermaidServer();
   const port = server.address().port;
 
-  const browser = await puppeteer.launch({ headless: true });
+  // --no-sandbox is required on GitHub Actions' Ubuntu runners, which
+  // restrict unprivileged user namespaces; acceptable here since this is a
+  // short-lived CI job rendering the repo's own trusted content, not a
+  // multi-tenant service.
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load" });
 
