@@ -154,7 +154,11 @@ If the client omits or fails to validate `state`, the OAuth flow has no CSRF tok
 
 ### 4. Leaking codes/tokens through a lax AS (the classic ATO)
 
-If the AS mis-validates `redirect_uri`, the attacker CSRFs the victim into an OAuth flow whose code lands at an attacker page. For the code grant the attacker does not even need the secret or token: they replay the stolen code to the *real* `/callback`, and the client completes the exchange and logs the attacker into the victim's account. More secure servers require `redirect_uri` again at `/token` and reject a mismatch (back channel, attacker cannot control it).
+Applies to the **code grant** specifically. Implicit has no redeemable artifact to intercept and replay; the access token itself is the thing that leaks, and leaking it grants access immediately with no further step, so implicit is strictly worse here, not exempt.
+
+If the AS mis-validates `redirect_uri`, the attacker CSRFs the victim into an OAuth flow whose code lands at an attacker page. The attacker then replays that stolen code to the client's *real* `/callback`; the client, not the attacker, performs the `/token` exchange, and the resulting session lands in the attacker's browser under the victim's identity.
+
+Whether that replay succeeds depends on what the client presents at `/token`. A **confidential client** already holds its `client_secret` server-side, so the exchange completes with nothing extra from the attacker, PKCE or not. A **PKCE-protected public client** only completes it if the attacker's browser also holds the matching `code_verifier`<sup>[[9]](#ref9)</sup> — normally it does not, since the verifier is generated and stored locally by whichever browser called `/authorize` for that code, not the one that later replays it. PKCE bound correctly (per-attempt, `S256`) closes this specific replay; an AS that doesn't require it, or accepts `code_challenge_method=plain`, or a client that stores the verifier somewhere replayable (a predictable value, shared across tabs) reopens it. That's why RFC 9700 recommends PKCE for confidential clients too<sup>[[1]](#ref1)</sup>, not just public ones: it is the independent fix for the *replay*, where exact `redirect_uri` re-validation at `/token` is the fix for the *leak*. An AS needs both; either alone still leaves the other half of this attack open.
 
 ### 5. Flawed scope validation (scope upgrade)
 
