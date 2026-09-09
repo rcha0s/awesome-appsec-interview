@@ -186,27 +186,39 @@ Ordered by effectiveness. Framing headers are the only real fix; everything else
 
 ## Interviewer probes
 
-Mid: "Does `frame-ancestors` protect against something X-Frame-Options doesn't?"
+**Does `frame-ancestors` protect against something X-Frame-Options doesn't?**
+
+Mid: Yes. `frame-ancestors` can allowlist multiple origins in one header, while XFO only ever honors a single value.
 
 Principal: Two things. First, `frame-ancestors` can list multiple explicit origins (`frame-ancestors host-a host-b`), where XFO only honors a single value, so multi-partner embedding is impossible with XFO alone. Second, `frame-ancestors` checks the entire ancestor chain up to the top level, not just the immediate parent: if A embeds B embeds C, and C sends `frame-ancestors B`, the load still blocks because A is also an ancestor and isn't in the list. That's the exact opposite of the dead `ALLOW-FROM`, which only checked the top-level context and broke on legitimate nested embeds. Per the CSP spec, if a response carries an enforced `frame-ancestors` directive the browser must ignore XFO entirely, though older engines like Chrome 40 and Firefox 35 got that wrong and preferred XFO, which is why you still send both.
 
-Mid: "The endpoint has a valid CSRF token on every request. Does that stop clickjacking?"
+**The endpoint has a valid CSRF token on every request. Does that stop clickjacking?**
+
+Mid: No. The victim's own browser sends the framed request with their real session, so it's a legitimate authenticated request and carries a valid CSRF token automatically.
 
 Principal: No, and conflating the two is the tell. The framed request is genuine, on-domain, and fully authenticated in the victim's real session, so it carries a valid CSRF token automatically, the attacker never had to forge one. The actual differentiator is how the request gets sent: CSRF forges an entire request with no user interaction required; clickjacking needs a real user gesture, just one aimed at UI the user can't see. `SameSite` cookies happen to help both, because they stop the session from riding along on the cross-site request either way, but a CSRF token only ever helps CSRF.
 
-Mid: "You've got `frame-ancestors 'self'` on every response. Is the app safe from clickjacking?"
+**You've got `frame-ancestors 'self'` on every response. Is the app safe from clickjacking?**
+
+Mid: Largely, yes. `frame-ancestors 'self'` tells the browser to refuse to render the page in a frame from any other origin, which blocks the standard overlay attack.
 
 Principal: Only if the header actually reaches the client on every response, and only against browser-driven attacks. Two failure modes to check for: a CDN, WAF, or reverse proxy silently stripping the header in transit, which is a known real-world occurrence, and a `<meta>` tag substitute, which does nothing since both XFO and `frame-ancestors` must be real response headers. Beyond that, `frame-ancestors` is the authoritative fix for the framing vector specifically, but it says nothing about mobile tapjacking, which lives entirely in app-side touch filtering (`filterTouchesWhenObscured`) because there's no HTTP response header involved at all.
 
-Mid: "Chrome suppresses clicks on frames below a certain opacity. Doesn't that make clickjacking a solved problem in modern browsers?"
+**Chrome suppresses clicks on frames below a certain opacity. Doesn't that make clickjacking a solved problem in modern browsers?**
+
+Mid: Not really. That's a Chrome-specific heuristic, not a cross-browser guarantee, so you can't rely on it as your defense.
 
 Principal: No, treat it as a hint, not a control. It's a heuristic threshold, so an attacker just tunes the opacity to stay visually invisible while remaining above the trigger point, and it's browser-specific rather than a spec guarantee. It doesn't touch the `pointer-events: none` variant either, where the decoy is fully opaque and the click falls through by construction rather than by transparency. `frame-ancestors` is the only defense that removes the framing capability outright instead of trying to detect the overlay.
 
-Mid: "Won't `SameSite=Lax` cookies just solve clickjacking for you?"
+**Won't `SameSite=Lax` cookies just solve clickjacking for you?**
+
+Mid: It helps but doesn't fully solve it. `SameSite=Lax` stops the session cookie from being sent on the cross-site framed request, so an unauthenticated action would fail.
 
 Principal: They narrow it, not solve it. A `Lax`/`Strict` session cookie isn't sent on the cross-site framed request, so any clickjacking that depends on the victim being authenticated silently fails, the hijacked click reaches the target unauthenticated. But that's scope reduction, not elimination: it gives no protection at all if the sensitive action doesn't require authentication in the first place, and `SameSite=None` re-opens the hole entirely. Treat it as defense-in-depth alongside `frame-ancestors`, never as the primary control.
 
-Mid: "Does clickjacking only matter for security-critical actions like fund transfers or account deletion?"
+**Does clickjacking only matter for security-critical actions like fund transfers or account deletion?**
+
+Mid: No. Clickjacking can be used against any single-click action, from account settings to social sharing buttons, not just high-value transactions.
 
 Principal: No. Likejacking, tricking users into clicking a hidden social-media "Like" or engagement button, was historically the highest-volume real-world use of clickjacking, and it doesn't touch money or data at all. The attack works on any single authenticated click a site can be tricked into routing to a hidden target, so scope the defense (`frame-ancestors`) at the response-header level for the whole site, not just the pages you've decided are "sensitive."
 

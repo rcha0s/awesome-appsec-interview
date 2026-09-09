@@ -190,27 +190,39 @@ CouchDB and Couchbase N1QL, plus Cassandra CQL, are SQL-like enough that the cla
 
 ## Interviewer probes
 
-Mid: "How is NoSQL injection different from SQL injection at a mechanical level?"
+**How is NoSQL injection different from SQL injection at a mechanical level?**
+
+Mid: SQL injection breaks out of a string literal to alter query syntax, whereas NoSQL injection sends an operator like `$ne` or `$gt` directly as the value in a JSON query object instead of a plain string or number.
 
 Principal: In SQL injection the "code" is a string, so the classic move is breaking out of a quoted literal. In a document store like MongoDB the query is already a structured object (BSON/JSON), and operators are just reserved `$`-prefixed keys nested inside a value. When a parser like `qs` or `express.json()` turns `username[$ne]=x` or `{"username":{"$ne":"x"}}` into a real nested object, and that object is passed straight into `find()`, the attacker has promoted a scalar value into a predicate the engine evaluates directly. A candidate who only talks about escaping quotes is applying the SQL mental model and will miss `{"$ne":""}` entirely, since there is no quote to break.
 
-Mid: "You dropped `express-mongo-sanitize` in as middleware. Is the endpoint fixed?"
+**You dropped `express-mongo-sanitize` in as middleware. Is the endpoint fixed?**
+
+Mid: It helps. The middleware strips `$` and `.` out of keys before the query runs, so a payload like `{"$ne":"x"}` gets neutralized before it reaches `find()`.
 
 Principal: No, not by itself. Sanitizers like `express-mongo-sanitize` strip `$` and `.` keys, which closes the common shape, but they do not stop a value that is legitimately a string from being misused, and known bypass classes exist: depth-limited stripping that misses nested payloads, prototype-pollution keys like `__proto__` that historically were not treated as query operators by the sanitizer, and replace-mode configs that a lenient driver normalizes back into a live operator. The durable control is casting the value to its expected type (`String(req.body.username)`) at the query-construction site plus a positive allowlist of expected field names; the sanitizer is a belt on top of that, not the belt itself.
 
-Mid: "If `$where` is your JS-execution sink, and the target has a hardened MongoDB, can you still exploit this?"
+**If `$where` is your JS-execution sink, and the target has a hardened MongoDB, can you still exploit this?**
+
+Mid: Not through `$where` specifically, since modern MongoDB versions disable server-side JavaScript by default, but other operators like `$ne` or `$gt` can still be injected if the app doesn't type-check its input.
 
 Principal: Yes. Modern MongoDB disables `$where` scripting by default, so you cannot assume a JS-eval extraction path is available on a hardened target. But operator injection does not need JavaScript at all: injecting `$regex` in a value position gives a boolean oracle you can walk character by character (`^a.*`, then `^ab.*`, and so on), which is the reliable blind channel even when `$where`/`mapReduce` are off. Assuming `$where` is always reachable is the tell that a candidate has not tested against a current MongoDB default configuration.
 
-Mid: "The app uses Mongoose with a typed schema. Are they safe from operator injection?"
+**The app uses Mongoose with a typed schema. Are they safe from operator injection?**
+
+Mid: Largely yes. Mongoose casts each field to its declared type, so a field declared `String` rejects an object like `{"$ne":"x"}` instead of matching it as an operator.
 
 Principal: Only for the fields the schema actually covers, and only if the raw request object never reaches the query unmodified. A declared `String` field gets cast, which collapses `{"$ne":...}` into a harmless string, but `Model.find(req.body)`, fields declared `Schema.Types.Mixed`, `strict:false`, or passing a raw object into `$where` or an aggregation stage all reopen the hole regardless of the schema. Type declarations are not a blanket safety net; they only help exactly where they are enforced.
 
-Mid: "You've confirmed operator injection lets you bypass login. What's the actual severity ceiling here?"
+**You've confirmed operator injection lets you bypass login. What's the actual severity ceiling here?**
+
+Mid: It's primarily an authentication bypass. An attacker can log in as another user without knowing valid credentials, which on its own is already a critical-severity finding.
 
 Principal: Auth bypass is the headline but not the ceiling. If server-side JavaScript is reachable (`$where`, `mapReduce`, `$function` on misconfigured servers), that is code execution, not just a login bypass. `$lookup` in an injected or attacker-shaped aggregation pipeline can join across collection boundaries the endpoint was never meant to expose, for example pulling `users` credentials into a product query. And a well-tuned `$where` or an unanchored `$regex` can burn CPU per document and denial-of-service the database, which matters even when the confidentiality path is closed. Report the full blast radius, not just the first bypass found.
 
-Mid: "You can't get a JS-eval sink and responses don't visibly change between true and false. Is the target actually safe?"
+**You can't get a JS-eval sink and responses don't visibly change between true and false. Is the target actually safe?**
+
+Mid: Not necessarily safe. A lack of an obvious visible difference doesn't rule out a blind channel, so it's worth checking response timing or more subtle differences before concluding the endpoint isn't injectable.
 
 Principal: Not necessarily. The same math that drives boolean-blind and time-based SQLi applies here. A `$regex` prefix walk gives a fast boolean oracle when responses do differ even subtly; when they do not differ at all, a `$where` expression that calls `sleep()` only when the condition holds turns response latency into the oracle. Character-by-character extraction over a yes/no signal is the same primitive in both injection families, just carried by a different query language.
 

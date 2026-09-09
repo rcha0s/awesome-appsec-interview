@@ -229,20 +229,28 @@ The defense pattern is to normalize before comparing: lowercase, IDNA-encode to 
 
 ## Interviewer probes
 
-- Mid: Why is calling HTTP/2 a mitigation for Host attacks incomplete in practice?
+- **Why is calling HTTP/2 a mitigation for Host attacks incomplete in practice?**
+- Mid: Because most public-facing HTTP/2 deployments terminate at the edge and get downgraded to HTTP/1.1 before reaching the origin, so `Host` is still in play at that translation step.
 - Principal: Because most H2 deployments terminate at the edge and downgrade to HTTP/1.1 for the origin, and that rewrite is a new attacker surface, not a removal of one. If the proxy trusts `:authority` for routing but copies the client-supplied `Host` field verbatim into the H1 request it emits, the back-end sees `Host: attacker.com` even though the front-end validated `victim.com`. The same downgrade is the substrate for H2.CL and H2.TE smuggling, where CRLF, oversized, or duplicate values in H2 header fields get spliced into the upstream H1 request. The correct posture at the boundary is to re-derive `Host` from `:authority`, reject H2 requests where `Host` is present and disagrees with `:authority`, and enforce RFC 9113 forbidden-characters checks on all header values before serializing to H1.
-- Mid: How does an attacker slip a lookalike host past an ASCII allowlist?
+- **How does an attacker slip a lookalike host past an ASCII allowlist?**
+- Mid: By registering a punycode/IDN domain whose ASCII `xn--...` form satisfies the allowlist but displays as a different, trusted-looking name to whoever ends up viewing the link.
 - Principal: Any parser gap between validator and sink is exploitable. The concrete primitives are: a trailing dot that a DNS resolver strips but a string allowlist does not, punycode A-labels (`xn--...`) that pass ASCII checks but render as the target's U-label in the email a victim receives, Unicode dot equivalents (U+3002, U+FF0E) that some parsers treat as label separators, mixed-case comparisons against case-insensitive DNS, and userinfo/whitespace tolerated by permissive parsers. The defense is to normalize before comparing: lowercase, IDNA-encode, strip a single trailing dot, canonicalize IPv6, and reject anything with whitespace, userinfo, or non-LDH characters, then match the normalized full host exactly. String `endswith` on the raw header is the anti-pattern that every one of these bypasses.
 
-Mid: "You've locked down `Host` validation. Is the app safe from Host-driven attacks now?"
+**You've locked down `Host` validation. Is the app safe from Host-driven attacks now?**
+
+Mid: Not necessarily. You'd also want to check whether the app honors an override header like `X-Forwarded-Host`, which can bypass `Host` validation entirely.
 
 Principal: Not necessarily, check the override headers next. `X-Forwarded-Host` is the sleeper: even hardened `Host` validation is moot if the framework silently prefers an override header the operator never realized was enabled, and variants like `X-Host`, `X-Forwarded-Server`, and `X-HTTP-Host-Override` are frequently honored by default in third-party components. Always test the overrides explicitly, not just `Host` itself, and disable any override header you don't genuinely need behind a trusted proxy.
 
-Mid: "You found `Host` reflected unescaped into a script `src` on the page. Is that exploitable XSS?"
+**You found `Host` reflected unescaped into a script `src` on the page. Is that exploitable XSS?**
+
+Mid: Not directly. You can't make a victim's browser send an attacker-controlled `Host` header, so the reflection alone has no way to reach a victim.
 
 Principal: Not by itself, and that's a common overclaim. You cannot force a victim's browser to send a poisoned `Host` header, so a reflected client-side bug from `Host` has no delivery mechanism on its own. It becomes exploitable only through a second channel: a cache that stores and replays your poisoned response to other users (web cache poisoning), or an email/reset flow that carries the value to a victim outside the browser's control over its own request. Stating that caveat is what shows you understand deliverability, not just spotting the reflection.
 
-Mid: "The password-reset token is high-entropy and single-use. Why does poisoning it via `Host` still work?"
+**The password-reset token is high-entropy and single-use. Why does poisoning it via `Host` still work?**
+
+Mid: Because the token strength isn't the issue. The reset link itself is built from the attacker-controlled `Host` header, so the genuine token gets sent to the attacker's domain instead of the real site.
 
 Principal: Because the flaw is in link construction, not token strength. The token itself is correct, unguessable, and burns after one use, but the app built the reset link from the attacker-controlled `Host` header, so the genuine token gets delivered to an attacker-controlled domain instead of the real one. A longer or more random token does nothing to fix that; the fix is a canonical domain read from server-side configuration, never from the request, so there's nothing for the attacker to redirect.
 

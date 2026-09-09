@@ -189,23 +189,33 @@ Not every injection fires at the request-handling sink. A common pattern is that
 
 ## Interviewer probes
 
-Mid: "We switched from `system()` to `execFile`/`ProcessBuilder` with an argument vector, so we're no longer exposed to command injection?"
+**We switched from `system()` to `execFile`/`ProcessBuilder` with an argument vector, so we're no longer exposed to command injection?**
+
+Mid: Yes, that removes the risk, since there's no shell left to interpret metacharacters like `;`, `|`, or `$()`.
 
 Principal: Only half right. Vector-based exec kills metacharacter injection because there's no shell to parse `;`, `|`, or `$()`, but it does nothing for argument injection: if a user-controlled value can start with `-`, it's still parsed as a flag by whatever binary you're invoking, and OWASP's curl example (`--output`, `--config`) shows that turns into file writes or RCE. You still need a no-leading-dash check and a `--` end-of-options delimiter before user-controlled positional arguments.
 
-Mid: "Java's `Runtime.exec(String)` doesn't spawn a shell, so is it as safe as the `ProcessBuilder(List<String>)` form?"
+**Java's `Runtime.exec(String)` doesn't spawn a shell, so is it as safe as the `ProcessBuilder(List<String>)` form?**
+
+Mid: It's safer than a shell-based call since metacharacters aren't interpreted as syntax, but the `List`/array form is still the recommended way to invoke it.
 
 Principal: It doesn't invoke a shell, so metacharacters become literal arguments rather than syntax, that part is true. But it splits the string on whitespace using its own quoting rules, which don't match what a shell would honor, so arguments containing spaces or quotes get mis-split in ways that create their own correctness and security footguns. Prefer the `List`/array form, which passes each argument as its own vector element with no splitting involved at all.
 
-Mid: "Node's `child_process.exec` and `execFile` both run a child process, so does it matter which one we use?"
+**Node's `child_process.exec` and `execFile` both run a child process, so does it matter which one we use?**
+
+Mid: Yes, `exec` runs the command through a shell while `execFile` runs the binary directly with an argument array, so `execFile` is the safer default for untrusted input.
 
 Principal: It's the exact fault line to know: `exec` spawns a shell and interprets the full metacharacter grammar, `execFile` execs the binary directly with an argument array and does not. Passing `{shell: true}` to `spawn` or `execFile` reopens the hole they were chosen to close, so a review has to check for that option explicitly, not just which function name was called.
 
-Mid: "If a command injection doesn't echo output back and there's no visible error, can we conclude the input isn't reaching a shell?"
+**If a command injection doesn't echo output back and there's no visible error, can we conclude the input isn't reaching a shell?**
+
+Mid: No, you'd want to try a time-delay payload like `sleep 10` before concluding the endpoint is safe.
 
 Principal: No, blind is the common case, not the exception. Absence of reflected output only means you haven't confirmed it with the cheapest method. Pivot to a time-based delay (`ping -c 10` or `sleep 10` as a yes/no oracle) and then to DNS OAST, which also exfiltrates data by folding command output into a subdomain, before concluding the endpoint isn't vulnerable.
 
-Mid: "If the application calls out to `ping` or another common utility by name, is there anything to worry about beyond the injection itself?"
+**If the application calls out to `ping` or another common utility by name, is there anything to worry about beyond the injection itself?**
+
+Mid: Best practice is to invoke trusted commands by their absolute path rather than relying on `PATH` resolution.
 
 Principal: If it's an unqualified binary name rather than an absolute path, and the attacker can influence `PATH` or the working directory, they may be able to hijack which binary actually runs, independent of any argument or metacharacter handling. It's a narrow but real escalation path, and the fix (absolute paths for trusted commands) is cheap enough that its absence is worth flagging in review.
 

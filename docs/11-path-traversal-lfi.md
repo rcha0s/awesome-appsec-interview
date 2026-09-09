@@ -238,31 +238,45 @@ if target == base or target.startswith(base + os.sep):
 
 ## Interviewer probes
 
-Mid: "The filter strips `../` from the filename parameter before using it. Is that sufficient?"
+**The filter strips `../` from the filename parameter before using it. Is that sufficient?**
+
+Mid: No, you also need to block absolute paths and make sure the base directory is actually enforced, not just relative traversal sequences.
 
 Principal: No, stripping is a string operation applied to a resolution problem. Non-recursive stripping is defeated by `....//`, which becomes `../` once the inner sequence is removed; single versus double URL-encoding (`%2e%2e%2f` vs `%252e%252e%252f`) and overlong UTF-8 sequences like `%c0%af` bypass filters written against the literal string; and an absolute path bypasses it entirely if the base directory isn't actually enforced. The fix isn't a better filter, it's canonicalizing to the real absolute path and confining after resolution, not before.
 
-Mid: "You've implemented `file.getCanonicalPath().startsWith(BASE_DIRECTORY)` as the confinement check in Java. Good enough?"
+**You've implemented `file.getCanonicalPath().startsWith(BASE_DIRECTORY)` as the confinement check in Java. Good enough?**
+
+Mid: Roughly, yes. Canonicalizing the path and checking it starts with the base directory is the right general approach.
 
 Principal: There's a real pitfall in that exact pattern. If `BASE_DIRECTORY` doesn't end in a separator, a sibling directory that shares the same string prefix, `/var/www/images` versus `/var/www/images_public`, can pass the `startsWith` check without actually being inside the intended directory. You have to append the separator before comparing, or compare canonical parent directories directly. And it has to be the canonical (real, symlink-resolved) path being checked, not just a lexically normalized one, or a symlink inside the base directory defeats the whole check.
 
-Mid: "The Node.js code uses `path.join(base, userInput)` before opening the file. Does that confine the path?"
+**The Node.js code uses `path.join(base, userInput)` before opening the file. Does that confine the path?**
+
+Mid: No. `path.join` just concatenates and normalizes the path, it doesn't check that the result stays inside `base`.
 
 Principal: No, and that's a very common misreading. `path.join` normalizes a path, it does not confine it to `base`. If `userInput` is itself absolute, the join semantics can discard `base` entirely on some platforms, and even for a relative traversal like `../../../etc/passwd`, `path.join` will happily normalize it to a clean path that's still outside `base`. The correct pattern is `path.resolve(base, userInput)` followed by an explicit check that the result starts with `base + path.sep`. Most real Node LFIs trace back to `path.join` being treated as a sanitizer when it's just normalization.
 
-Mid: "Why does something like `%252e%252e%252f` bypass a filter that already blocks `%2e%2e%2f`?"
+**Why does something like `%252e%252e%252f` bypass a filter that already blocks `%2e%2e%2f`?**
+
+Mid: Because it's double URL-encoded, so it needs to be decoded twice before it turns into `../`, and the filter probably only decodes once.
 
 Principal: Because of where decoding happens relative to where the filter runs. The web container performs one layer of percent-decoding on the URL before the application ever sees the value. A filter written against that once-decoded string catches `%2e%2e%2f` because it decodes to `../` on that first pass, but `%252e%252e%252f` only decodes to `../` after a second decode, which happens later at whatever layer re-decodes the string, often the filesystem call itself. The filter and the resolution layer are looking at different numbers of decode passes, and that gap is the bug.
 
-Mid: "I've seen null-byte truncation, `filename=../../../etc/passwd%00.jpg`, cited as a way to defeat a forced file extension. Is that still a real technique?"
+**I've seen null-byte truncation, `filename=../../../etc/passwd%00.jpg`, cited as a way to defeat a forced file extension. Is that still a real technique?**
+
+Mid: It used to work by truncating the string at the null byte so the appended extension never got checked, but I believe modern runtimes patched that.
 
 Principal: It's historical, not current. It worked because C strings terminate at a NUL byte while the higher-level language kept the full string including the appended extension, so the OS open call saw a path ending at `/etc/passwd` while the application's own logic still thought the filename ended in `.jpg`. That was fixed in PHP 5.3.4 and doesn't work on modern runtimes. Citing it as a live technique today is a tell that the knowledge is outdated; the live equivalents are stream wrappers and other extension-suffix tricks, not null-byte truncation.
 
-Mid: "You've confirmed you can read `/etc/passwd` through the traversal. What's the actual severity here?"
+**You've confirmed you can read `/etc/passwd` through the traversal. What's the actual severity here?**
+
+Mid: It's an arbitrary file read, so at minimum it's high-severity information disclosure: config files, source code, and credentials are all reachable.
 
 Principal: Reading one file is the floor, not the ceiling, and the escalation path is what a staff-level answer states explicitly. In PHP specifically, traversal into an `include`/`require` sink executes whatever's read, so the same bug reaches RCE through log poisoning (writing PHP into a request header the server logs, then including the log), session-file poisoning, or PHP stream wrappers like `php://input` and `data://` that make the "included file" attacker-supplied content outright. Stopping the writeup at "can read `/etc/passwd`" understates the bug if there's any include sink reachable.
 
-Mid: "The read primitive here only reaches `php://filter`, which is documented as read-only. Does that cap the impact at information disclosure?"
+**The read primitive here only reaches `php://filter`, which is documented as read-only. Does that cap the impact at information disclosure?**
+
+Mid: Yes, since `php://filter` only reads and transforms file contents, it can't write or execute anything, so the ceiling should be source and secrets disclosure.
 
 Principal: Not necessarily. `php://filter` alone already exfiltrates source code and secrets, which is serious, but the filter-chain technique goes further: by chaining a sequence of `convert.iconv.*` conversions, the read primitive can be made to synthesize arbitrary attacker-chosen PHP bytes from any readable file's contents. Fed into an `include` sink, that's full RCE from a wrapper that's read-only by design, no writable log or session file required. "It can only read files" is exactly the assumption that technique breaks.
 

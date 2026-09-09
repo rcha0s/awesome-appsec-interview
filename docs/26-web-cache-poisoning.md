@@ -254,31 +254,45 @@ Impact spans mass stored XSS, persistent open redirect, script/JSON hijack to fu
 
 ## Interviewer probes
 
-Mid: "What's the fundamental bug that makes web cache poisoning possible?"
+**What's the fundamental bug that makes web cache poisoning possible?**
+
+Mid: The cache decides two requests are the same by looking at only part of the request (the cache key), so if the app's response also depends on something outside that key, like a header, an attacker can change that unkeyed part to make the cache store a bad response.
 
 Principal: The cache keys on a subset of the request, typically method, path, query string, and Host, while the origin builds the response from a larger set of inputs that includes headers, cookies, and sometimes the port. Everything in that gap is unkeyed: attacker-controlled but invisible to the cache's equivalence check. If any unkeyed input reaches a response-affecting sink, one poisoned request gets stored under the ordinary key and served to everyone whose keyed components match. Every technique in this doc, unkeyed header, unkeyed port, cloaked param, normalized key, key injection, is a specific instance of that same X != Y gap.
 
-Mid: "If a response is served with `Cache-Control: private, no-cache`, is it safe from poisoning?"
+**If a response is served with `Cache-Control: private, no-cache`, is it safe from poisoning?**
+
+Mid: Not automatically. `Cache-Control` tells the cache what it should do, but a misconfigured or third-party cache can ignore it and store the response anyway, so it needs to be verified rather than assumed.
 
 Principal: No, and assuming so is the tell of a junior answer. `Cache-Control` is advisory to the fronting cache, not enforced. Kettle poisoned Red Hat despite the response carrying `public, no-cache`, because Akamai cached it anyway. The only way to know whether a given cache tier honors a directive is to test empirically with a cross-machine fetch, not to read the header and conclude the response is uncacheable.
 
-Mid: "If a header-reflected value is only exploitable via a custom header, isn't that basically unexploitable since you can't make a victim's browser send arbitrary headers cross-origin?"
+**If a header-reflected value is only exploitable via a custom header, isn't that basically unexploitable since you can't make a victim's browser send arbitrary headers cross-origin?**
+
+Mid: Normally yes, since you can't force a victim's browser to send an arbitrary header, but if the response sits behind a cache, one attacker-triggered request can get the poisoned response stored and served to everyone else afterward.
 
 Principal: That reasoning is correct for a single request, and it's exactly why teams dismiss header-reflected XSS or encoded-only reflected XSS as low severity. A cache breaks that assumption: the attacker sends one request with the header, the response gets stored under the normal URL, and every subsequent visitor who never sent that header receives the poisoned response. Caching converts reflected into stored and removes the need to lure the victim to a crafted URL at all, which is why these "unexploitable" bugs are worth re-triaging once you know caching sits in front of the app.
 
-Mid: "Does setting `Vary: User-Agent` fix a poisoning bug that's triggered by a spoofable header?"
+**Does setting `Vary: User-Agent` fix a poisoning bug that's triggered by a spoofable header?**
+
+Mid: It helps by folding that header into the cache key so fewer users share a poisoned entry, but it doesn't fix the root cause, and not every cache honors `Vary` in the first place.
 
 Principal: It can help, but treat it as fragile, not a fix. Some CDNs, Cloudflare among them, ignore client `Vary` outright, so the header does nothing there. Where it is honored, it's also a double-edged signal: promoting `User-Agent` into the key tells the attacker exactly which requests share a cache entry, enabling surgical targeting of one victim's exact UA string or maximizing blast radius by picking the most common one. `Vary` is worth checking, but the real fix is closing the unkeyed-input gap directly, not relying on the cache to key around it.
 
-Mid: "What's the actual difference between web cache poisoning and web cache deception?"
+**What's the actual difference between web cache poisoning and web cache deception?**
+
+Mid: Poisoning gets the cache to store attacker-supplied content, so it hits every user who requests that URL afterward; deception tricks the cache into storing one victim's own private response under a URL the attacker can then request, so it only affects that one victim.
 
 Principal: They're mirror images that share the same mechanics but invert the data flow and the victim model. Poisoning abuses an unkeyed input reaching a response-affecting sink to push attacker-chosen content into the cache, and it has many victims per poisoned URL, everyone whose keyed request matches. Deception abuses the cache's own rules (an extension or path match) to store one specific victim's private, authenticated response under a URL the attacker can then fetch unauthenticated, and it has exactly one victim per exploited URL. Poisoning requires an unkeyed sink; deception requires no unkeyed input at all, just a routing and caching-rule mismatch.
 
-Mid: "CDNs are geographically sharded. Does that matter for exploiting a poisoning bug?"
+**CDNs are geographically sharded. Does that matter for exploiting a poisoning bug?**
+
+Mid: Yes. Since each region typically caches independently, the attacker needs to poison the specific regional cache or edge node that the intended victim's requests will actually be routed through.
 
 Principal: Yes, and it's an operational detail that separates candidates who've actually tested this from those who've only read about it. A poisoned entry lives in the regional cache (colo) that served the request, not globally, so to hit a specific victim, or a specific automated consumer like Facebook's Open Graph scraper, you have to poison the colo they'll actually hit. That's discoverable via `/cdn-cgi/trace` on Cloudflare or by DNS-resolving the target from multiple regions, then poisoning from a cheap VPS or via a Host-header override in that region.
 
-Mid: "If a cache entry only lives for 30 minutes, doesn't that cap the blast radius of a poisoning attack?"
+**If a cache entry only lives for 30 minutes, doesn't that cap the blast radius of a poisoning attack?**
+
+Mid: Somewhat, since the poisoned response eventually expires, but the attacker can just send another poisoning request before it expires to keep the entry poisoned indefinitely, so TTL alone doesn't limit exposure much.
 
 Principal: No, and this is where interviewers probe whether a candidate understands the attack as sustained rather than one-shot. `Age` and `max-age` together tell an attacker the exact second an entry expires, so instead of a noisy flood of re-poisoning requests, a single well-timed request right after expiry keeps the entry poisoned indefinitely with minimal signal. Duration of any one cache entry is not a meaningful mitigation on its own; the fix has to close the underlying unkeyed-input gap, not rely on TTL to limit exposure.
 

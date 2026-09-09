@@ -193,35 +193,51 @@ File-system watchers on `~/.cache/huggingface/hub` and MLflow artifact roots has
 
 **Q: What exact opcode makes pickle dangerous, and where does it live in a `torch.load` call?**
 
-Mid: "the `REDUCE` opcode." Principal: `REDUCE` (`R`) pops `(callable, args)` off the stack and invokes `callable(*args)`; the callable is resolved earlier by `GLOBAL` / `STACK_GLOBAL` (`c` / `\x93`), which imports the module. `torch.load` hands the file to `pickle_module.Unpickler.load()` unless `weights_only=True`, in which case a restricted unpickler with an allowlisted global map runs instead. Failure mode: someone flips `weights_only=False` for a legacy checkpoint and the whole class returns. See CVE-2019-6446 (numpy `allow_pickle`, disputed by NumPy maintainers but still the earliest widely-cited illustration of the default-allow-pickle risk) and the PyTorch 2.6 rollout of `weights_only=True` as the modern canonical fix. Pickle protocol 5 / PEP 574 introduced out-of-band buffers, which does not change the RCE surface but does change what a scanner must trace<sup>[[17]](#ref17)</sup>.
+Mid: The `REDUCE` opcode is what actually calls the function pickle reconstructed, and `torch.load` runs the file through Python's regular unpickler unless you pass `weights_only=True`.
+
+Principal: `REDUCE` (`R`) pops `(callable, args)` off the stack and invokes `callable(*args)`; the callable is resolved earlier by `GLOBAL` / `STACK_GLOBAL` (`c` / `\x93`), which imports the module. `torch.load` hands the file to `pickle_module.Unpickler.load()` unless `weights_only=True`, in which case a restricted unpickler with an allowlisted global map runs instead. Failure mode: someone flips `weights_only=False` for a legacy checkpoint and the whole class returns. See CVE-2019-6446 (numpy `allow_pickle`, disputed by NumPy maintainers but still the earliest widely-cited illustration of the default-allow-pickle risk) and the PyTorch 2.6 rollout of `weights_only=True` as the modern canonical fix. Pickle protocol 5 / PEP 574 introduced out-of-band buffers, which does not change the RCE surface but does change what a scanner must trace<sup>[[17]](#ref17)</sup>.
 
 **Q: Why is safetensors actually safe, not just "safer"?**
 
-Mid: "no code execution." Principal: the parser is JSON header parse plus offset math; there is no code path that resolves a name to a callable and invokes it. The invariant is "the format has no execution primitive." Failure mode: developers stash pickle blobs inside `__metadata__` and re-hydrate them, which is a wrapper-level violation of the invariant. Defense trade-off: safetensors does not preserve arbitrary Python graph state, so frameworks that need it (optimizer step, custom class instances) have to redesign persistence.
+Mid: Safetensors only stores a JSON header describing tensor shapes and offsets plus raw bytes, so there's no code path in the parser that can execute anything.
+
+Principal: the parser is JSON header parse plus offset math; there is no code path that resolves a name to a callable and invokes it. The invariant is "the format has no execution primitive." Failure mode: developers stash pickle blobs inside `__metadata__` and re-hydrate them, which is a wrapper-level violation of the invariant. Defense trade-off: safetensors does not preserve arbitrary Python graph state, so frameworks that need it (optimizer step, custom class instances) have to redesign persistence.
 
 **Q: If I run Fickling and it returns clean, am I safe to load the file?**
 
-Mid: "yes." Principal: no. Fickling raises confidence but is a static analyzer over opcode semantics; it can be evaded with novel gadget chains that recompose approved globals into dangerous behavior, and it does not sandbox the actual load. Combine Fickling with `weights_only=True` and a sandboxed first-load. Multiple HF Hub repos have shipped payloads that fooled early picklescan signatures until Fickling caught them, and signature-based scanners lose to string-concatenation obfuscation (`getattr(__import__("o"+"s"), "sys"+"tem")`).
+Mid: A clean Fickling scan means no known-dangerous globals were found in the pickle stream, which is a strong signal, but I would still want other checks before fully trusting the file.
+
+Principal: no. Fickling raises confidence but is a static analyzer over opcode semantics; it can be evaded with novel gadget chains that recompose approved globals into dangerous behavior, and it does not sandbox the actual load. Combine Fickling with `weights_only=True` and a sandboxed first-load. Multiple HF Hub repos have shipped payloads that fooled early picklescan signatures until Fickling caught them, and signature-based scanners lose to string-concatenation obfuscation (`getattr(__import__("o"+"s"), "sys"+"tem")`).
 
 **Q: How does GGUF get exploited if it has no callable invocation?**
 
-Mid: "it does not." Principal: parser bugs. Metadata array lengths and tensor offsets are attacker-controlled 64-bit integers; naive allocation without overflow checks produces DoS, and misaligned offsets have progressed to OOB reads. The safety property is "no callable invocation," not "unexploitable," so fuzzing the parser is not optional. Defense: bounded allocations, offset validation against file length, and continuous libFuzzer coverage. Failure mode: a downstream project vendors an older llama.cpp GGUF parser and misses the fix.
+Mid: GGUF itself has no code-execution path, but a malformed header with bad lengths or offsets can still crash or corrupt the loader, so parser bugs are the real risk.
+
+Principal: parser bugs. Metadata array lengths and tensor offsets are attacker-controlled 64-bit integers; naive allocation without overflow checks produces DoS, and misaligned offsets have progressed to OOB reads. The safety property is "no callable invocation," not "unexploitable," so fuzzing the parser is not optional. Defense: bounded allocations, offset validation against file length, and continuous libFuzzer coverage. Failure mode: a downstream project vendors an older llama.cpp GGUF parser and misses the fix.
 
 **Q: What is the ONNX Runtime custom operator attack surface?**
 
-Mid: "malicious ops." Principal: models declare op `(domain, op_type)` pairs; the runtime resolves them against registered kernels. Standard `ai.onnx` is safe, but ORT supports `RegisterCustomOpsLibrary(path)`, and deployments that scan a plugins directory at startup turn model-load into `dlopen`. Any deployment that auto-registers plugin libraries is a `dlopen` primitive dressed up as a model load. Defense: allowlist domains at parse time and register custom-op libraries only from explicit, controlled paths.
+Mid: A model can reference a custom operator outside the standard `ai.onnx` domain, and if the runtime is configured to load a matching custom-op shared library, that gives the model a way to run native code.
+
+Principal: models declare op `(domain, op_type)` pairs; the runtime resolves them against registered kernels. Standard `ai.onnx` is safe, but ORT supports `RegisterCustomOpsLibrary(path)`, and deployments that scan a plugins directory at startup turn model-load into `dlopen`. Any deployment that auto-registers plugin libraries is a `dlopen` primitive dressed up as a model load. Defense: allowlist domains at parse time and register custom-op libraries only from explicit, controlled paths.
 
 **Q: Your CI runs on model PRs. How do you keep a malicious `pytorch_model.bin` in a fixture from popping the runner?**
 
-Mid: "scan it." Principal: multiple layers. Reject non-allowlisted formats at the PR check. Fickling pass on any surviving pickle. Run the actual load inside a locked-down container with no cloud credentials mounted, no outbound network, and no bind mounts to the host workspace beyond the artifact. Compare loaded SHA-256 to a signed registry entry. Reference class: GitHub Actions supply-chain compromises where a workflow ran attacker code with `GITHUB_TOKEN` still in scope.
+Mid: Run any pickle-based fixture through a scanner like Fickling before it loads, and avoid loading untrusted model files directly on a runner that holds real credentials.
+
+Principal: multiple layers. Reject non-allowlisted formats at the PR check. Fickling pass on any surviving pickle. Run the actual load inside a locked-down container with no cloud credentials mounted, no outbound network, and no bind mounts to the host workspace beyond the artifact. Compare loaded SHA-256 to a signed registry entry. Reference class: GitHub Actions supply-chain compromises where a workflow ran attacker code with `GITHUB_TOKEN` still in scope.
 
 **Q: A team says "we sign our models, so we do not need to worry about pickle". Response?**
 
-Mid: "signing is not enough." Principal: signing establishes provenance, not safety. A signed pickle is a pickle. The correct combination is signed plus format-restricted (safetensors or `weights_only`-loadable). Otherwise a compromised training pipeline or a rogue insider signs the malicious artifact and the signature check waves it through.
+Mid: Signing tells you who produced the file, not whether the file itself is safe to load, so a signed pickle can still contain a malicious `__reduce__`.
+
+Principal: signing establishes provenance, not safety. A signed pickle is a pickle. The correct combination is signed plus format-restricted (safetensors or `weights_only`-loadable). Otherwise a compromised training pipeline or a rogue insider signs the malicious artifact and the signature check waves it through.
 
 **Q: Which of these is more dangerous in practice, a pickle in a private model registry or a pickle from HuggingFace?**
 
-Mid: "HuggingFace." Principal: depends on your identity model. A private registry with weak internal RBAC and no signature check is often worse because engineers implicitly trust it; a hostile HF repo at least raises "external" flags. HF picklescan is best-effort, repos have been weaponized in the past, and treating a hub as a trust boundary flattens supply-chain risk. The invariant to enforce is "no pickle regardless of source," not "trust internal, distrust external."
+Mid: A pickle pulled from a public HuggingFace repo is the bigger worry by default, since anyone can publish there, whereas an internal registry is usually more tightly controlled.
+
+Principal: depends on your identity model. A private registry with weak internal RBAC and no signature check is often worse because engineers implicitly trust it; a hostile HF repo at least raises "external" flags. HF picklescan is best-effort, repos have been weaponized in the past, and treating a hub as a trust boundary flattens supply-chain risk. The invariant to enforce is "no pickle regardless of source," not "trust internal, distrust external."
 
 ## War story
 

@@ -223,31 +223,45 @@ Detection (defensive review): grep for template APIs that receive a dynamic/conc
 
 ## Interviewer probes
 
-Mid: "The response reflects your input back, and you see `<tag>` render unescaped. That's XSS, right?"
+**The response reflects your input back, and you see `<tag>` render unescaped. That's XSS, right?**
+
+Mid: Not necessarily. Before calling it XSS I'd also check whether the input is passed through a template engine, since that can produce similar-looking unescaped output through a different mechanism.
 
 Principal: Not necessarily, and confirming which one matters. Send `{{7*7}}` or `${7*7}` instead of a script tag: if the response shows `49`, that math executed server-side, which no browser-side XSS can do. Juniors stop at "reflected XSS" in the plaintext context; the senior move is proving server-side evaluation, because SSTI usually escalates to RCE, not just a script running in someone's browser.
 
-Mid: "The parameter looks like it's just filling in a value, e.g. rendering `Hello {{greeting}}`. You tried a script tag and it got encoded. Is this endpoint safe?"
+**The parameter looks like it's just filling in a value, e.g. rendering `Hello {{greeting}}`. You tried a script tag and it got encoded. Is this endpoint safe?**
+
+Mid: If a script tag gets encoded, that rules out reflected XSS on this parameter, so from that angle it looks safe.
 
 Principal: No, that only rules out the plaintext-context case. Code context means the input lands inside an existing template expression, so there's no XSS cue to notice, it just looks like a hashmap lookup. Confirm there's no direct XSS, then try breaking out of the expression with the engine's terminator, for example `greeting=x}}<tag>`. If the tag renders after that, you've escaped into template context and the earlier "safe" result was a false negative.
 
-Mid: "The team says they HTML-encode all user-facing output, so injection isn't a concern here."
+**The team says they HTML-encode all user-facing output, so injection isn't a concern here.**
+
+Mid: That covers XSS, but it doesn't say anything about whether the template engine itself is evaluating malicious input server-side, so it's not enough on its own for SSTI.
 
 Principal: That's a wrong answer for SSTI specifically. Encoding addresses XSS, the browser-side rendering of the response; it does nothing about `{{7*7}}` being computed on the server before encoding ever happens. The only real fix is to stop concatenating user input into the template string at all and pass it as a context variable instead, the same data/code separation as a parameterized SQL query.
 
-Mid: "How do you figure out which template engine you're dealing with once you suspect SSTI?"
+**How do you figure out which template engine you're dealing with once you suspect SSTI?**
+
+Mid: Send probes with each engine's delimiter syntax, like `{{7*7}}` or `${7*7}`, and see which one gets evaluated to `49`: that tells you which family of engines you're looking at.
 
 Principal: Discriminate with math and string probes rather than trusting one response. `{{7*7}}` evaluating to `49` narrows you to `{{ }}`-style engines like Jinja2 or Twig, but `{{7*'7'}}` is the payload that actually separates them: Twig coerces to `49`, Jinja2 does Python-style string repetition and returns `7777777`. The important discipline is not concluding from a single payload, since syntax overlaps across engines; where possible, submit deliberately invalid syntax and read the error message, which often names the engine and version outright.
 
-Mid: "The app runs user-supplied templates through a sandboxed engine, like Twig's sandbox mode or Smarty's secure mode. Are we covered?"
+**The app runs user-supplied templates through a sandboxed engine, like Twig's sandbox mode or Smarty's secure mode. Are we covered?**
+
+Mid: Sandboxing meaningfully reduces the risk since it restricts what the template can reach, but I'd still confirm the sandbox is configured correctly and the engine is on a patched version.
 
 Principal: Sandboxing is defense in depth, not a guarantee. Every major engine with a sandbox has had escape CVEs: Twig's sandbox was defeated via `checkMethodAllowed`/`displayBlock` because the sandbox whitelisted an interface rather than the actual dangerous methods, and Smarty's secure mode was defeated via static classes the whitelist forgot to fence, both fixed only after the bypass was found. A sandbox cuts specific edges in the object graph; a bypass just finds an edge it forgot to cut. Treat it as a hardening layer behind real data/code separation and a locked-down container, not as the security boundary itself.
 
-Mid: "You've fuzzed every request parameter for SSTI and gotten no reflection anywhere. Can you conclude the app isn't vulnerable?"
+**You've fuzzed every request parameter for SSTI and gotten no reflection anywhere. Can you conclude the app isn't vulnerable?**
+
+Mid: Not entirely. I'd still try blind detection techniques like time delays or out-of-band callbacks, since some SSTI doesn't reflect output directly back in the response.
 
 Principal: No. SSTI can arrive out-of-band: template code can end up embedded in log files, session files, or `/proc/self/environ`, and get evaluated later when something else triggers a render of that data, not on the request that supplied it. The injection point isn't always an obvious request parameter, so blind confirmation (time delays, DNS/HTTP callbacks) still needs to be tried even when nothing reflects.
 
-Mid: "We found an AngularJS expression injection in the frontend. Same bug class as SSTI?"
+**We found an AngularJS expression injection in the frontend. Same bug class as SSTI?**
+
+Mid: No. That's still running in the browser, so it's client-side template injection, which is really an XSS-class bug rather than server-side code execution.
 
 Principal: No, different class with different impact. "Server-side" is the operative word: client-side template injection in AngularJS, Vue, or Handlebars running in the browser is XSS-class, it executes in the victim's browser session. SSTI evaluates on the server, in the server's language runtime, which is why it escalates to RCE, file read/write, and internal network access rather than a browser-scoped script.
 

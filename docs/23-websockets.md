@@ -198,19 +198,27 @@ Ordered by effectiveness. The CSWSH fixes (1 and 2) are the ones interviewers pr
 - **Mid:** SSE. It's unidirectional server-to-client, rides normal `fetch`, is subject to CORS, and inherits `SameSite` cookie behavior, so the CSWSH class disappears.
 - **Principal:** WebSockets are exempt from CORS and delegate the cross-site decision to the server's `Origin` check, so any missing check is a hijack primitive with two-way read. SSE keeps the browser in the loop: the initial `EventSource` / `fetch` request goes through CORS, `SameSite` cookies aren't attached cross-site by default, and there's no CSWSH-shaped attack because there's no writable back-channel. Choose WebSockets only when the workload genuinely needs bidirectional low-latency messaging. Long-polling fallbacks (socket.io, SockJS) reintroduce the WebSocket auth model over plain HTTP endpoints, and those `/polling` routes are frequently forgotten by `Origin` checks and CSRF middleware, so audit them under the same lens as the raw socket.
 
-Mid: "Is `Sec-WebSocket-Key`/`Sec-WebSocket-Accept` some kind of session token or CSRF defense?"
+**Is `Sec-WebSocket-Key`/`Sec-WebSocket-Accept` some kind of session token or CSRF defense?**
+
+Mid: No, it's just a proof that both ends speak the WebSocket protocol correctly, not a credential or an anti-CSRF token.
 
 Principal: No, and treating it as one is a common misread. It's an anti-cache-poisoning proof that both ends actually speak the WebSocket protocol, nothing more. `Sec-WebSocket-Accept` is deterministically derivable by anyone: `base64(SHA1(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))`, using a fixed GUID defined in RFC 6455. It grants no security and carries no identity. The handshake's actual authentication, if any, comes entirely from the cookie (or lack of one) and whatever `Origin`/token checks the server bothers to run.
 
-Mid: "Why is CSWSH rated higher-impact than classic CSRF, mechanically?"
+**Why is CSWSH rated higher-impact than classic CSRF, mechanically?**
+
+Mid: Because CSWSH gives the attacker a live socket they can also read from, not just send blind requests like classic CSRF, so it can exfiltrate data as well as perform actions.
 
 Principal: Classic CSRF forges a fire-and-forget request; the attacker can make the victim's browser act, but cannot see the response. CSWSH yields a live, two-way channel: because WebSockets are exempt from CORS, the browser lets the attacker's page open the socket and read every message the server sends back through `onmessage`. So the attacker both performs unauthorized actions (the CSRF-equivalent write) and exfiltrates data the victim can access (a read CSRF structurally cannot do). That two-way read is the entire reason CSWSH gets rated above ordinary CSRF.
 
-Mid: "The protocol masks client-to-server frames. Does that mean message contents are protected from a network attacker?"
+**The protocol masks client-to-server frames. Does that mean message contents are protected from a network attacker?**
+
+Mid: No, masking is just XOR obfuscation for proxy/cache safety, not encryption; only `wss://` (TLS) actually protects message contents on the wire.
 
 Principal: No. Masking (RFC 6455) exists to stop malicious page content from poisoning caches and misconfigured intermediaries that might mistake a WebSocket frame for a cacheable HTTP response, it's an anti-cache-poisoning measure for infrastructure, not message confidentiality. It's also asymmetric: client frames are masked, server frames are not, which only makes sense as a proxy-safety mechanism rather than an application security control. Only TLS via `wss://` protects the actual contents of messages and cookies from network interception.
 
-Mid: "Should you worry about `permessage-deflate` compression on a WebSocket that carries both a session token and attacker-influenced content?"
+**Should you worry about `permessage-deflate` compression on a WebSocket that carries both a session token and attacker-influenced content?**
+
+Mid: Yes, mixing secrets with attacker-controlled input under a shared compression context can leak the secret through compressed-message-size differences, so avoid compressing sensitive data alongside untrusted input.
 
 Principal: Yes. WebSockets negotiate the `permessage-deflate` extension (RFC 7692) at handshake time, and when `server_no_context_takeover` is false, the compression dictionary persists across frames on the same connection. If a secret, a session ID, a CSRF token, private message content, ever shares that compressed context with attacker-controllable input, the attacker can mount a CRIME/BREACH-style oracle: vary an injected prefix and watch compressed frame length to recover the secret byte by byte. The fix is to disable compression on channels that mix secrets with untrusted input, or require `no_context_takeover` so each frame compresses independently. The same extension is a DoS vector inbound too, since a small compressed frame can decompress to megabytes, so cap post-decompression size, not just wire size.
 

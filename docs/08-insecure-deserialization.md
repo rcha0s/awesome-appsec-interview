@@ -202,27 +202,39 @@ Reference: OWASP Deserialization Cheat Sheet<sup>[[8]](#ref8)</sup>, OWASP ASVS 
 
 ## Interviewer probes
 
-Mid: "The payloads use JSON, not a native binary format, so this app isn't exposed to deserialization attacks, right?"
+**The payloads use JSON, not a native binary format, so this app isn't exposed to deserialization attacks, right?**
+
+Mid: Not automatically. If the deserializer supports polymorphic type resolution, such as Jackson's default typing, the payload can still specify which class to instantiate and get code execution.
 
 Principal: Not necessarily. JSON and XML are only safe when type handling is off. Jackson's default typing, FastJson's autotype, and Json.NET's `TypeNameHandling` all let the document itself choose which class gets instantiated, which turns a "safe" format into a full RCE sink the same way a native deserializer is. The question isn't the wire format, it's whether a config flag lets the attacker pick the class.
 
-Mid: "You found the app uses an old, vulnerable version of Commons-Collections. You upgraded it and confirmed the ysoserial payload no longer works. Is this fixed?"
+**You found the app uses an old, vulnerable version of Commons-Collections. You upgraded it and confirmed the ysoserial payload no longer works. Is this fixed?**
+
+Mid: No. That closes one known exploit path, but the app is still deserializing untrusted input directly, so another gadget chain in a different library could still get you RCE.
 
 Principal: The library upgrade closed one gadget chain, not the vulnerability. The actual bug is that the endpoint deserializes untrusted input with a native deserializer at all; transitive dependencies and future-discovered gadget classes, plus the fact that memory-corruption bugs can exist in the deserializer itself, mean you cannot enumerate every dangerous class on the classpath. Removing one gadget is whack-a-mole. The fix is to stop deserializing untrusted bytes with that mechanism, or gate it with an integrity check before deserialization ever runs.
 
-Mid: "Couldn't you just check the object's type after deserializing, and reject anything unexpected?"
+**Couldn't you just check the object's type after deserializing, and reject anything unexpected?**
+
+Mid: Not reliably. By the time you can inspect the object's type, it has already been constructed, and any malicious code in its deserialization callbacks, like `readObject` or `__wakeup`, has already run.
 
 Principal: That check runs too late. By the time `if (obj instanceof DangerousType)` executes, the object has already been constructed and its lifecycle hooks, `readObject`, `__wakeup`, `__reduce__`, whatever the language calls them, have already run. The gadget chain fires during reconstruction, before your application code ever sees the result. The check has to precede deserialization entirely, which in practice means a signature/HMAC gate or not deserializing untrusted bytes at all.
 
-Mid: "This is a strongly-typed Java codebase with strict interfaces everywhere. Does that reduce the deserialization risk?"
+**This is a strongly-typed Java codebase with strict interfaces everywhere. Does that reduce the deserialization risk?**
+
+Mid: Not really. Static typing only governs what your code does with the object after it's built, but the dangerous code runs during construction, before any type check ever executes.
 
 Principal: Not for this bug class. The attacker's injected object might end up being the "wrong" type and throw an exception later in the business logic, but that's irrelevant, because the kick-off gadget already executed during `readObject`, before any type check in your code could run. Static typing constrains what your code does with the object after construction; it says nothing about what runs during construction.
 
-Mid: "If there's no known vulnerable gadget-chain library on the classpath, how would you even confirm the app is deserializing untrusted bytes?"
+**If there's no known vulnerable gadget-chain library on the classpath, how would you even confirm the app is deserializing untrusted bytes?**
+
+Mid: Send a payload that triggers an out-of-band callback, like a DNS lookup to a domain you control, and see whether it fires: that confirms deserialization is happening independent of any specific gadget.
 
 Principal: Use a universal payload that doesn't depend on any specific gadget library. ysoserial's `URLDNS` payload forces a DNS lookup to a domain you control purely from classes present in any JVM, so a callback proves the bytes were deserialized regardless of what's on the classpath. `JRMPClient` does the same with a raw TCP connect, useful when DNS egress is blocked, and the timing differential between a local and a firewalled target confirms it even blind. This is the confirm-before-you-hunt-for-RCE workflow.
 
-Mid: "The endpoint calls `file_exists()` on an uploaded file's path, there's no `unserialize()` anywhere in the code. Any deserialization risk there?"
+**The endpoint calls `file_exists()` on an uploaded file's path, there's no `unserialize()` anywhere in the code. Any deserialization risk there?**
+
+Mid: Possibly. In PHP, filesystem functions operating on a `phar://` stream can trigger deserialization implicitly, even with no explicit `unserialize()` call in the code.
 
 Principal: Yes, and it's the subtle PHP case interviewers use to test for implicit sinks. A PHAR archive's manifest stores serialized metadata that PHP deserializes automatically whenever a filesystem function operates on a `phar://` stream, including read-only, "safe-looking" calls like `file_exists()`, `is_dir()`, or `getimagesize()`. Upload a polyglot that's a valid image and a valid PHAR, then get the app to touch it through a `phar://` wrapper, and `__wakeup`/`__destruct` fire without any explicit deserialization call in sight.
 

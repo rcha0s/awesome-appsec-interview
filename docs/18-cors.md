@@ -227,27 +227,39 @@ CORS bugs are configuration bugs, so the defense is disciplined configuration, o
 
 ## Interviewer probes
 
-Mid: "If we tighten our CORS policy, does that improve our access control?"
+**If we tighten our CORS policy, does that improve our access control?**
+
+Mid: No. CORS only controls whether a browser is allowed to read a cross-origin response; it doesn't add any server-side authorization of its own.
 
 Principal: No, and that's a common category error. CORS only ever relaxes the Same-Origin Policy; it can't tighten anything beyond what SOP already enforces by default. A misconfiguration can only increase exposure, never reduce it, and a perfectly locked-down CORS policy adds zero server-side authorization on its own, it's still just telling the browser which origins are allowed to read a response the server was already going to compute and return. If someone is proposing CORS as part of an access-control story, the actual access control has to live somewhere else.
 
-Mid: "Doesn't a strict CORS policy protect us against CSRF?"
+**Doesn't a strict CORS policy protect us against CSRF?**
+
+Mid: Not really. CSRF is about the browser sending a forged, credentialed request, and CORS only governs whether the attacker's script can read the response that comes back, not whether the request goes out.
 
 Principal: Not in the way people usually think, and conflating the two is probably the single most common CORS confusion. CSRF is a send attack, SOP already lets any site send a cross-origin request, cookies and all, CORS never governed that. CORS governs whether the attacker's script can read the response that comes back. A permissive CORS policy, ironically, worsens CSRF risk rather than fixing it, because it re-enables the attacker to both send the credentialed cross-origin request and read the authenticated response, turning a blind forgery into a data-theft primitive with a readable result. The primary CSRF defense is a token or SameSite cookies, not CORS.
 
-Mid: "Why do so many real CORS bugs come from reflecting the request's Origin header instead of just allowlisting?"
+**Why do so many real CORS bugs come from reflecting the request's Origin header instead of just allowlisting?**
+
+Mid: Because `Access-Control-Allow-Origin` can only hold one exact origin per response, so teams that need to support many origins with credentials often just reflect whatever `Origin` the request sent instead of building and maintaining a real allowlist.
 
 Principal: Because browsers force the decision. `Access-Control-Allow-Origin` can only ever hold one exact origin per response, browsers don't support multiple origins or a partial wildcard like `https://*.example.com` in that header, and the wildcard `*` is flatly refused by browsers whenever `Access-Control-Allow-Credentials: true` is also present, since that combination would expose authenticated content to literally everyone. So a team that needs to support many origins with credentials has exactly two options: maintain a real allowlist and echo back only a match, or take the easy path and just reflect whatever `Origin` the request sent. That easy path is the classic critical bug, and understanding that it's the wildcard-with-credentials refusal that pushes teams toward reflection explains why this bug recurs across completely unrelated codebases.
 
-Mid: "You found an endpoint reflecting Origin with Allow-Credentials: true. Is that automatically a critical finding?"
+**You found an endpoint reflecting Origin with Allow-Credentials: true. Is that automatically a critical finding?**
+
+Mid: Usually yes. That's the classic CORS misconfiguration pattern, so I'd flag it as critical and confirm the response actually returns sensitive data.
 
 Principal: Only if three things are true together: credentials are actually sent on the request, the origin validation is genuinely weak or reflected, and the response contains something sensitive. Pull out any one of those and the finding downgrades, an endpoint that returns nothing an unauthenticated caller couldn't already reach directly isn't meaningfully exploitable through CORS, credentials being absent means there's no session to steal, and a tight allowlist means the attacker's origin was never going to be trusted in the first place. Triage on all three before calling it critical, not just on whether the header looks scary.
 
-Mid: "The endpoint requires a custom header, which triggers a CORS preflight. Doesn't that function as an authorization check?"
+**The endpoint requires a custom header, which triggers a CORS preflight. Doesn't that function as an authorization check?**
+
+Mid: No. Preflight only decides whether the browser sends the cross-origin request at all; the server still has to do its own authentication and authorization once the request arrives.
 
 Principal: No, preflight is a legacy-protection and integrity mechanism, not an authorization boundary. All it does is gate which cross-origin requests the browser is willing to send in the first place, based on method and headers, mostly to keep old servers that predate CORS from receiving requests they never expected. Once a request passes preflight and actually reaches the server, the server still owns every bit of authentication and authorization for what it's about to do. Requiring a custom header can incidentally block simple cross-site form-style requests, which is genuinely useful as a CSRF speed bump, but it was never designed as, and doesn't function as, an access-control decision point.
 
-Mid: "We only allowlist a handful of origins we control, all internal. Are we safe from CORS-based data theft?"
+**We only allowlist a handful of origins we control, all internal. Are we safe from CORS-based data theft?**
+
+Mid: Mostly, yes. A hardcoded allowlist of origins you control avoids the classic reflected-origin bug, but each of those origins needs to stay free of XSS since they can all read your API's responses.
 
 Principal: Only as safe as the weakest origin on that list, and that changes over time. A CORS trust relationship is transitive: if you name `partner.example.com` in your allowlist today because it's trustworthy, and that subdomain develops an XSS vulnerability six months from now, or gets dangling-DNS'd into a subdomain takeover, that XSS can now read every response your API sends it, using the CORS grant you configured correctly at the time. Every trusted origin you name needs to be held to the same security bar as your own app for exactly as long as it stays in that allowlist, which is why a policy that never gets revisited is itself a slow-growing risk.
 
