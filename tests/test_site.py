@@ -77,6 +77,29 @@ class TestMermaidConfig:
         assert len(mermaid_docs) > 0, "No mermaid diagrams found in docs/"
 
 
+class TestMermaidRendering:
+    def test_all_diagrams_render(self):
+        """Every mermaid diagram must actually render (mermaid.render(), same
+        version and init config the live site uses), not just look like valid
+        Markdown. `mkdocs build` never executes mermaid.js -- diagrams render
+        client-side -- so a malformed diagram (e.g. a semicolon inside sequence
+        message/note text, which mermaid treats as a statement separator even
+        mid-sentence) produces zero build warnings and only shows up as
+        "Diagram failed to render." on the live page.
+        """
+        result = subprocess.run(
+            ["node", "scripts/check-mermaid-diagrams.mjs"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        assert result.returncode == 0, (
+            "One or more mermaid diagrams failed to render:\n"
+            + result.stdout + result.stderr
+        )
+
+
 # ---------------------------------------------------------------------------
 # Nav hygiene
 # ---------------------------------------------------------------------------

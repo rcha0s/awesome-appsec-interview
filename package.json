@@ -1,0 +1,12 @@
+{
+  "name": "awesome-appsec-interview",
+  "private": true,
+  "description": "Test tooling for awesome-appsec-interview (the site itself is static Markdown built with MkDocs; see requirements.txt)",
+  "scripts": {
+    "check-diagrams": "node scripts/check-mermaid-diagrams.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "11.16.0",
+    "puppeteer": "^25.9.0"
+  }
+}

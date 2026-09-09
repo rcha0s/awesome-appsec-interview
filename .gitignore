@@ -25,5 +25,8 @@ __pycache__/
 .venv/
 .venv_check/
 
+# Node (test tooling only -- see package.json)
+node_modules/
+
 # Claude Code project-local settings (machine-specific)
 .claude/settings.local.json
