@@ -10,7 +10,7 @@ Adds ONE new architectural-control doc to the awesome-appsec-interview repo, mat
 ## What this skill produces
 
 - One markdown file at `docs/NN-<slug>.md` where `NN` is the next available two-digit number in the docs directory (same flat numbering as `add-appsec-topic`, no new subdirectory).
-- Opener: `#` title on line 1, blockquote mental-model paragraph on line 3 grounding the topic in its established first-principles framework by name (not paraphrased: authentication's three factors per NIST SP 800-63B, authorization's RBAC/ABAC/ReBAC access-control models, encryption's CIA triad and Kerckhoffs's principle, etc.), stating what decision this control governs, why it forks by context, and the single biggest thing a Staff reviewer checks for, then `**Interview frequency:** Core | Common | Situational | Niche`.
+- Opener: `#` title on line 1, blockquote mental-model paragraph on line 3 grounding the topic in its established first-principles framework by name (not paraphrased: authentication's three factors per NIST SP 800-63B, authorization's RBAC/ABAC/ReBAC access-control models, encryption's CIA triad and Kerckhoffs's principle, etc.), stating what decision this control governs, why it forks by context, and the single biggest thing a Principal reviewer checks for, then `**Interview frequency:** Core | Common | Situational | Niche`.
 - `## Where this decision forks`: states the decomposition axis this topic actually forks on (deployment surface, environment/lifecycle stage, actor type, or another axis — topic-dependent, never assumed).
 - One `### <context>` subsection per fork, each with an options table (`Option | Best for | Avoid when | Status (2026) | Deep dive`) and a design-considerations table for that context's sub-feature gaps (`Consideration | Why it matters | Design guidance | Deep dive`), **capped at 5-8 rows**: the highest-signal gaps only. Everything else worth a mention gets one compact closing line under the table instead of its own row (comma-separated, gap name plus a three-to-six word reason, linking to the deep-dive doc(s) that cover the rest).
 - `## Recommended defaults by context` (compact table), `## Migration path`, `## Interviewer probes` (5-8 Q&A pairs, tradeoff- and gap-framed, Mid vs Principal answers), `## Sources` (HTML-anchored numbered entries).
@@ -34,11 +34,11 @@ Adds ONE new architectural-control doc to the awesome-appsec-interview repo, mat
 ### 1. Pick the doc number
 
 ```bash
-next=$(ls docs/ | grep -E '^[0-9]{2}-' | awk -F- '{print $1}' | sort -n | tail -1)
+next=$(ls docs/ | grep -E '^[0-9]{2,3}-' | awk -F- '{print $1}' | sort -n | tail -1)
 echo $((next + 1))
 ```
 
-Pad to two digits. If it would exceed 99, ask the user how to renumber; do not overwrite.
+Pad to two digits below 100, three digits at 100+ (matches the existing flat sequence: `docs/99-*.md`, `docs/100-*.md`). The `{2,3}` in the grep pattern is required once numbering crosses 99, a 2-digit-only pattern silently misses `docs/100-*.md` and beyond and would recompute a colliding number.
 
 ### 2. Generate the slug
 
@@ -116,14 +116,14 @@ DOC SHAPE (per docs/adr/0003-architectural-control-doc-shape.md and CONTEXT.md's
 
 Section order:
   1. \`#\` Title on line 1 (the decision, e.g. "Authentication," not one mechanism).
-  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences): OPENS by naming the topic's established first-principles framework (authentication: something you know / have / are, per NIST SP 800-63B; authorization: RBAC/ABAC/ReBAC; encryption: the CIA triad and Kerckhoffs's principle; use the real framework for whatever the topic is, never invent one), then what decision this control governs, why it forks by context, and the single biggest thing a Staff reviewer checks for. A reader without the framework already in mind has nothing to hang the rest of the doc on; this is not optional.
+  2. Blockquote mental-model paragraph on line 3 (starts with '> ', 4-7 sentences): OPENS by naming the topic's established first-principles framework (authentication: something you know / have / are, per NIST SP 800-63B; authorization: RBAC/ABAC/ReBAC; encryption: the CIA triad and Kerckhoffs's principle; use the real framework for whatever the topic is, never invent one), then what decision this control governs, why it forks by context, and the single biggest thing a Principal reviewer checks for. A reader without the framework already in mind has nothing to hang the rest of the doc on; this is not optional.
   3. \`**Interview frequency:** Core | Common | Situational | Niche\` on its own line.
   4. \`## Where this decision forks\`: 3-5 sentences naming the decomposition axis this topic's security profile actually diverges across. Suggested axis: <axis>. Use it if it fits; if a different axis is truer to this specific topic, use that one instead and say so explicitly. Do not force every topic through deployment-surface (web/mobile/desktop/service-to-service) if that is not the axis that matters here.
   5. One \`### <context>\` subsection per fork named in step 4. Each contains, in order:
      a. A short paragraph: what's different about this decision in this context.
      b. An options table: \`| Option | Best for | Avoid when | Status (2026) | Deep dive |\`. Status is one of Preferred / Still common / Legacy / Emerging / Niche-but-required. Deep dive links to an existing repo doc from the EXISTING DOCS list below (never invent a filename).
      c. A design-considerations table for the security-relevant sub-features this context's option(s) drag along: \`| Consideration | Why it matters | Design guidance | Deep dive |\`. This is where gaps like password-reset, forgot-password, remember-me, MFA-recovery, credential-rotation-at-scale belong. "Design guidance" is ONE LINE: name the shape of the right choice (e.g. "single-use, ~15min TTL, invalidated on use"). It is NEVER a defense-in-depth paragraph and NEVER an attack explanation; both of those live in the Deep dive link.
-        CAP THIS TABLE AT 5-8 ROWS. Pick the gaps a Staff-level interviewer would actually probe on or that materially change the design, not every conceivable sub-feature. A table beyond 8 rows becomes an unreadable wall, exactly the failure this shape exists to avoid.
+        CAP THIS TABLE AT 5-8 ROWS. Pick the gaps a Principal-level interviewer would actually probe on or that materially change the design, not every conceivable sub-feature. A table beyond 8 rows becomes an unreadable wall, exactly the failure this shape exists to avoid.
      d. Immediately under the design-considerations table, one compact closing line naming any other sub-feature gaps still worth a mention that didn't make the table: comma-separated, each gap name plus a three-to-six-word reason, linking to whichever deep-dive doc(s) cover the rest. Not a sentence per gap, not a bullet list, one line. Example shape: "Also worth checking: cookie domain scope (avoid over-broad \`Domain=\`), idle vs. absolute session timeout, delegated admin access without credential sharing, see [Authentication and Session Management](12-authentication-session.md)."
   6. \`## Recommended defaults by context\`: a compact table \`| Context | Recommended default | Why |\`, the fast-skim answer.
   7. \`## Migration path\`: practical staged guidance for moving from a legacy default to the recommended one, per context where it differs meaningfully. What a rollout looks like, what breaks, what stakeholders push back on.
@@ -222,7 +222,7 @@ Output STRICT JSON array. Each finding: {"line_or_section": <string>, "issue": <
 
 const INTERVIEWER_CHARTER = `
 ROLE: Principal-appsec-interviewer verifier, for a design-checklist doc (not a per-vulnerability doc).
-Every ### <context> subsection must give a Staff-level reader enough to answer "which option would you pick here, and what have you not thought about yet."
+Every ### <context> subsection must give a Principal-level reader enough to answer "which option would you pick here, and what have you not thought about yet."
 Every design consideration must be something a candidate could plausibly be probed on missing.
 
 Opener check:
