@@ -4,6 +4,8 @@
 
 **Interview frequency:** Core
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for the fetch-by-URL and webhook-delivered-file pattern as an SSRF sink, the same mechanism behind the 2019 Capital One breach.*
+
 ## How it works
 
 Any feature that fetches a resource on the user's behalf is a candidate: webhooks, link unfurling / URL preview, "import from URL," PDF and HTML-to-image renderers, image proxies and thumbnailers, SSO/SAML metadata fetch, open-graph scrapers, XML parsers (XXE to SSRF), and analytics that follow the `Referer` header. The user-controlled part may be a full URL, just a hostname or path fragment spliced into a URL server-side, or a URL buried inside XML/JSON/SVG.

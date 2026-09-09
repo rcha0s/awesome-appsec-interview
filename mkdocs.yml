@@ -81,6 +81,7 @@ nav:
     - Audit Logging and Non-repudiation: 100-audit-logging.md
     - Session Management: 101-session-management.md
     - Multi-Tenancy and Isolation: 102-multi-tenancy-isolation.md
+    - File Upload and Storage Security: 103-file-upload-storage-security.md
 
   - Injection:
     - injection/index.md

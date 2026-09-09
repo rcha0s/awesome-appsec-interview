@@ -4,6 +4,8 @@
 
 **Interview frequency:** Situational
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for decompression bombs in preview/OCR pipelines and export/backup bundling, and storage-generation quota exhaustion as a denial-of-wallet vector.*
+
 ## Quick reference
 
 ```

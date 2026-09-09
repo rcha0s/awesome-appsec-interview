@@ -17,5 +17,6 @@ See [what "invariant" means in these docs](../index.md#what-invariant-means-in-t
 | [Audit Logging and Non-repudiation](../100-audit-logging.md) | Who or what is audited: human, privileged, automated | What must be logged, tamper-evidence, keeping sensitive data out of the log while auditing access to it, break-glass review |
 | [Session Management](../101-session-management.md) | Deployment surface: web, mobile/desktop, service-to-service | Where the continuity proof lives and how it's revoked, deeper than Authentication's brief treatment |
 | [Multi-Tenancy and Isolation](../102-multi-tenancy-isolation.md) | Isolation layer: data, compute, application | Why application-layer checks fail silently and data-layer isolation (RLS, per-tenant schemas, vector-store scoping) fails loudly instead |
+| [File Upload and Storage Security](../103-file-upload-storage-security.md) | File sensitivity and serving context: public/low-sensitivity, private/sensitive documents, system-generated | Where a stored object lives, how retrieval gets authorized and expires, presigned URLs vs authenticated proxies, envelope encryption, tenant isolation, and SSRF risk in generation/import pipelines |
 
 More architectural control docs are planned; see the repo's `CONTEXT.md` and `docs/adr/0003-architectural-control-doc-shape.md` for the doc shape and the current backlog.

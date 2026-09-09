@@ -6,6 +6,8 @@
 
 *See also: [Authorization](97-authorization.md) for the RBAC/ABAC/ReBAC model families and PDP/PEP placement behind the ownership checks this doc requires, and [Multi-Tenancy and Isolation](102-multi-tenancy-isolation.md) for the data-layer backstop against cross-tenant IDOR when application checks are skipped.*
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for presigned-URL and object-store access-control design specifically, direct object reference applied to stored files rather than database rows.*
+
 ## How it works
 
 Access control sits on top of two other mechanisms and fails when either is trusted to do authorization's job. PortSwigger frames the dependency precisely<sup>[[1]](#ref1)</sup>: authentication confirms the user is who they claim, session management identifies which subsequent requests come from that same user, and access control decides whether that user may carry out the attempted action. When the third layer is missing or leaky, an authenticated (or even anonymous) user reaches data and functions outside their intended permissions.

@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for where XXE resurfaces downstream of upload validation, in preview/OCR/conversion pipelines that parse Office, XML, or SVG files a second time.*
+
 ## How it works
 
 XML documents can carry a Document Type Definition (DTD) inside an optional `DOCTYPE` at the top. The DTD can be internal (fully inline in the `DOCTYPE`), external (loaded from a URI via `SYSTEM`/`PUBLIC`), or a hybrid of both. The DTD is where entities are declared, and entities are the whole game.

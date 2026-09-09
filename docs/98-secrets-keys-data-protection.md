@@ -4,6 +4,8 @@
 
 **Interview frequency:** Core
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for applying envelope encryption and per-tenant key scoping to stored files specifically, and the storage-layer half of this doc's custody-boundary decision.*
+
 ## Where this decision forks
 
 The decomposition axis is custody boundary and consumer, meaning who holds the credential and what identity primitives that environment already hands them for free. A server or cloud workload sits inside a cloud account or cluster that can issue it identity without a secret at all: an IAM role, IRSA, a SPIFFE SVID. A CI pipeline has no persistent identity between runs, so its answer is short-lived federation rather than a vault it would have to bootstrap into on every job. A mobile app runs on hardware the user, not the org, controls, so the vault becomes whatever the OS keychain and secure hardware expose rather than a server-side service the app calls into. Data-at-rest and data-protection architecture gets a fourth context of its own, because it is less about who holds a live credential and more about how the stored data itself is structured so that holding valid credentials doesn't automatically mean holding the plaintext.

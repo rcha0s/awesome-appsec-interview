@@ -6,6 +6,8 @@
 
 *See also: [Authorization](97-authorization.md) for the access-control model families this doc's application layer draws on, especially ReBAC, which for many systems is the tenant-isolation mechanism itself.*
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for tenant isolation applied to shared object storage specifically, bucket policy versus application-enforced key prefixing.*
+
 ## Where this decision forks
 
 The axis is isolation layer, because the realistic isolation primitive and its operational cost differ sharply depending on where in the stack the boundary sits.<sup>[[5]](#ref5)</sup> The data layer (relational tables and, just as often forgotten, vector and AI retrieval stores) gets structural backstops like RLS and per-tenant schemas or databases. The compute layer (containers, VMs, shared inference infrastructure) gets namespace, cluster, or sandbox boundaries. The application layer gets the authorization checks themselves, treated here as the weakest and most-skippable layer rather than the primary mechanism, because it's the one every other layer exists to backstop. A design that only ever discusses the application layer hasn't actually made an isolation decision yet.

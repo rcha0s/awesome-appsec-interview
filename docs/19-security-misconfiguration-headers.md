@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for Content-Type/nosniff enforcement and origin isolation applied to user-uploaded and served files specifically.*
+
 ## How it works
 
 Security misconfiguration spans the whole stack, and the exploitable classes recur:

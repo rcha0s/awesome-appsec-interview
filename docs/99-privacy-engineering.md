@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for retention windows, deletion SLAs, and PII minimization applied to stored files and their derived copies (backups, caches, previews).*
+
 ## Where this decision forks
 
 Privacy risk splits into three separate decisions with distinct failure modes depending on which point in the data lifecycle you're looking at. At collection, the mistake is capturing more than the feature needs because it's technically free to grab. At processing, the mistake is treating de-identification as a permanent, one-time transformation instead of a re-identification risk that shifts as auxiliary datasets grow. At retention, the mistake is architecting deletion as a database delete statement without accounting for the backups, replicas, and legal holds that keep the data alive anyway. This doc forks into three contexts along that axis: collection and minimization, processing and de-identification, and retention and deletion.

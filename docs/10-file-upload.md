@@ -4,6 +4,8 @@
 
 **Interview frequency:** Common
 
+*See also: [File Upload and Storage Security](103-file-upload-storage-security.md) for what happens after a file passes upload validation: storage architecture, retrieval authorization, encryption at rest, and retention, forked by whether the content is public, private, or system-generated.*
+
 ## How it works
 
 To reason about upload-to-RCE you must know how a web server decides to execute a static file (PortSwigger).<sup>[[1]](#ref1)</sup> On request, the server parses the path, extracts the extension, and maps it to a MIME type via preconfigured rules. Then:
