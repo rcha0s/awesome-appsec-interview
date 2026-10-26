@@ -17,6 +17,8 @@ Each doc also carries an **Interview frequency** tag: Core (near-certain in any 
 
 One exception to the shape above: the **Architectural controls** docs (first section in the index below) are design checklists over one security-architecture decision, not one system. They fork by deployment context, compare realistic options in tables, and link out to the deep-dive docs instead of carrying their own How it works, Attack techniques, or Defense sections. See `docs/adr/0003-architectural-control-doc-shape.md` for the shape.
 
+One more exception: the **System design** docs (see the section below the index tables) have no attacker, so they use a requirements, design, trade-offs, and failure-modes shape. See `docs/adr/0004-system-design-doc-shape.md`.
+
 ## Index
 
 ### Architectural controls
@@ -188,6 +190,16 @@ One exception to the shape above: the **Architectural controls** docs (first sec
 |---|-------|------|-------|
 | 95 | [Webhooks](docs/95-webhooks.md) | Common | HMAC-SHA256 vs JWT-signed vs mTLS webhooks, timestamp binding to prevent replay, constant-time compare, SSRF via webhook dispatch, at-least-once delivery + receiver-side idempotency |
 
+### System design (skeleton)
+
+Principal-level system design revision notes in three sections. Each section index lists planned docs; no lesson docs are written yet.
+
+| Section | Planned topics |
+|---|---|
+| [Web systems](docs/system-design/web/index.md) | Storage engines, replication and consistency, partitioning, consensus, caching, queues and streams, rate limiting, capacity math; distributed KV store, news feed, chat, payments ledger |
+| [Mobile applications](docs/system-design/mobile/index.md) | Offline-first sync and conflict resolution, push delivery, client caching, battery and flaky networks, API versioning for old app builds, release and kill switches |
+| [Agentic applications](docs/system-design/agentic/index.md) | LLM serving, RAG at scale, agent orchestration and memory, eval pipelines, guardrails and tool trust boundaries, cost and latency budgets |
+
 ## Suggested revision order
 
 If you are cramming, prioritise by interview frequency: **XSS, SQLi, access control/IDOR, SSRF, CSRF, auth/session, JWT, OAuth**, then request smuggling and the caching/host-header trio, then the AI/agent docs if the role touches LLM or MCP integrations.
@@ -222,4 +234,4 @@ Open a PR. Small, focused changes (one new doc, one fix, one pass of cross-links
 
 ---
 
-*Scope: web application security, plus the adjacent AI/agent surface (LLM integrations and MCP). Defensive and educational revision material.*
+*Scope: web application security, plus the adjacent AI/agent surface (LLM integrations and MCP), and a system design track. Defensive and educational revision material.*

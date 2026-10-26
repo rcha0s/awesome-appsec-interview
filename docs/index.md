@@ -18,6 +18,8 @@ Every doc follows the same fixed shape (see below), specifically so you don't ha
 
 **Architectural Controls** (the first section below) is a different shape, deliberately. Instead of one system's mental model, How it works, and Attack techniques, each doc there is a design checklist over one security-architecture decision, broken down by context, with tables of options and the second-order gaps each one drags along, linking out to the deep-dive docs rather than repeating them. Start there if you're prepping for an architecture-review-style interview loop; start in the topic sections below if you're prepping for a per-vulnerability deep-dive loop.
 
+**System Design** is a third shape. It has no attacker, so each doc is organised around requirements, a design that meets them, and the trade-offs that flip when requirements change. See the [track overview](system-design/index.md).
+
 ## What "invariant" means in these docs
 
 An invariant is the specific property that has to hold for a system to be safe, stated precisely enough that you can point at the exact moment it breaks. "Validate input" is not an invariant. "The resource server rejects any access token whose `aud` does not equal its own canonical identifier" is.
@@ -49,6 +51,7 @@ For AI/agent-heavy roles: start at the three hubs (Web LLM Attacks, MCP Protocol
 | [Cryptography & Secrets](17-cryptographic-failures.md) | Crypto failures, payment/PII tokenization, money-movement authorization |
 | [Misconfiguration](19-security-misconfiguration-headers.md) | Security headers, misconfiguration, GraphQL, REST API security |
 | [Infrastructure](85-kubernetes.md) | Kubernetes, container escape, zero trust architecture |
+| [System Design](system-design/index.md) | Principal-level system design for web systems, mobile applications, and agentic applications (skeleton: planned docs per section) |
 | [AI & LLM Security](ai/index.md) | Prompt injection, agent threats, MCP/A2A protocols, RAG, guardrails, the OWASP LLM Top 10 |
 
 ## Document shape
