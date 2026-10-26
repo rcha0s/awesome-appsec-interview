@@ -16,6 +16,18 @@ _Avoid_: Umbrella, index.
 A design-checklist doc over one security-architecture decision (Authentication, Authorization, Secrets Management, ...), not one system. Breaks the decision down by whichever deployment context its risk profile actually diverges across (web / mobile / desktop-native / service-to-service, or another axis when that's the real one for the topic), enumerates the realistic options per context, and for each option surfaces both its top-level tradeoffs and the security-relevant sub-features it drags along (e.g. password auth's reset/remember-me/recovery flows) as concrete, high-level design guidance, not a full defense treatment. Links out to the existing deep-dive docs for attack mechanics and defense-in-depth instead of repeating them. Follows the shape locked in [docs/adr/0003-architectural-control-doc-shape.md](adr/0003-architectural-control-doc-shape.md), not the section order below, which applies to every other doc type. Never attack-shaped; never carries its own Attack techniques or Defense sections.
 _Avoid_: Comparison doc, overview doc.
 
+**System design doc**:
+A doc over one system or one infrastructure building block (a distributed key-value store, offline-first sync, RAG at scale), not a vulnerability class and not a decision checklist. Lives in the System Design nav section, in the web, mobile, or agentic subsection. Organised around requirements, a design that meets them, and the trade-offs that flip when the requirements change. Follows the shape locked in [docs/adr/0004-system-design-doc-shape.md](adr/0004-system-design-doc-shape.md), not the section order below. Never carries Attack techniques or Defense sections.
+_Avoid_: Design question, case study.
+
+**Design decision**:
+One numbered item under `## Design decisions` in a system design doc, rendered as `### N. <decision>`. States the options, the choice, the cost accepted, and the change in requirements that would flip the choice.
+_Avoid_: Trade-off, option.
+
+**Planned doc**:
+An entry in a System Design subsection index table that has a title and one line but no file yet. Unlinked and unnumbered. It becomes a doc when written, in a commit that also links it from the subsection index, `README.md`, and `mkdocs.yml`.
+_Avoid_: Stub, placeholder.
+
 **Interview frequency**:
 A tag every doc carries: Core (near-certain in any senior/staff appsec interview), Common (comes up often, not universal), Situational (depends on the role/domain matching), or Niche (real depth, rarely the actual focus). Defined here and mirrored in `README.md`'s Freq column and `docs/index.md`.
 
@@ -67,7 +79,9 @@ A single real, sourced incident with attacker steps and defender takeaway. Optio
 
 ## Doc section order (locked)
 
-Every doc follows this order:
+This order applies to every doc except two types, which have their own locked shapes: architectural control docs (ADR-0003) and system design docs (ADR-0004). The system design doc order is: title, mental model, `## Requirements and scale`, `## Core design`, `## Quick reference`, `## Design decisions`, `## Failure modes and operability`, optional `## Evolution`, `## Interviewer probes`, `## Sources`.
+
+Every other doc follows this order:
 
 1. `#` Title.
 2. Blockquote mental-model paragraph.

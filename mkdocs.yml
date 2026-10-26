@@ -192,3 +192,11 @@ nav:
       - AI & Agent Defenses: 65-ai-agent-defenses.md
       - Spotlighting: 66-spotlighting.md
 
+  - System Design:
+    - system-design/index.md
+    - Web Systems:
+      - system-design/web/index.md
+    - Mobile Applications:
+      - system-design/mobile/index.md
+    - Agentic Applications:
+      - system-design/agentic/index.md
